@@ -1,0 +1,140 @@
+Hola, agente IA. Soy China, supervisor del proyecto. He recibido un nuevo feedback detallado del usuario tras probar la versión más reciente. Aunque tu reporte indica que resolviste 10 ítems, el usuario aún encuentra problemas importantes que debes corregir. A continuación te detallo todos los puntos pendientes y nuevas solicitudes, priorizados por urgencia. Utiliza las credenciales de prueba del campus (47123607 / 123456789UPDTt@) para verificar en vivo. No hardcodees datos y sigue la filosofía modular.
+
+🔴 Prioridad alta (funcionalidad rota o incorrecta)
+1. Chat general por materia (falla en lectura y envío)
+Problema: El usuario entró a una materia, esperó, y el chat no mostraba los mensajes existentes (él había enviado "prueba" desde la web, y no aparecía). Al intentar enviar un mensaje desde el programa, obtuvo error: tuple object has no attribute 'head'. Además, el agente afirma haber enviado "prueba dos" con éxito, pero el usuario no lo ve en el programa.
+
+Tareas:
+
+Revisa backend/cache_utils.py (o donde hayas implementado get_mensajes_chat() y enviar_mensaje_chat()) y corrige el parseo de la respuesta del chat para evitar errores de atributos.
+
+Verifica que la lectura de mensajes del chat funcione correctamente: debe traer todos los mensajes, incluido el que el usuario escribió desde la web ("prueba") y el que tú enviaste ("prueba dos").
+
+Asegúrate de que el envío no solo devuelva True, sino que el mensaje se refleje en el historial del chat al actualizar.
+
+Importante: No todas las materias tienen chat habilitado. Implementa una detección: si la materia no tiene sección de chat, muestra un mensaje "Chat no disponible para esta materia" en lugar de intentar cargar y fallar.
+
+Prueba real: usa la materia "Administración y Mantenimiento de Redes" (ID 434 según tu reporte) y envía un mensaje "prueba tres". Luego lee el historial y confirma que aparecen "prueba", "prueba dos" y "prueba tres". Reporta resultados.
+
+2. Mensajes del webmail (ventana de detalle sucia y sin botones)
+Problema: Al leer un mensaje, la ventana muestra el título repetido, información redundante (encabezados institucionales, "Dos puntos candela", etc.) y no se puede seleccionar el texto. Faltan botones de acción (Recibido, Enviado, Eliminar, Reenviar, Responder).
+
+Tareas:
+
+Limpia la extracción y presentación: el modal debe mostrar solo:
+
+Título del mensaje (una vez).
+
+Remitente (ej. "Candela Estela Jirónimo") y fecha/hora.
+
+Destinatario ("Para: Ulises Julián Cabezas") en una línea separada.
+
+Cuerpo del mensaje limpio (sin firmas repetidas ni encabezados).
+
+Implementa botones visuales (aunque no todos funcionen aún, al menos colócalos): Responder, Reenviar, Eliminar, Marcar como leído/no leído. Si no es posible implementar la funcionalidad completa, al menos que los botones no den error y muestren un mensaje "Funcionalidad en desarrollo".
+
+Habilita la selección de texto en el área del mensaje (usa CTkTextbox con state="normal" y wrap="word", o habilita exportselection=True).
+
+Prueba con los mensajes existentes en la cuenta de prueba.
+
+3. Calificaciones (extracción incompleta)
+Problema: En la página oficial el usuario ve 4 calificaciones diferentes, pero el programa no las muestra correctamente. Además, hay una sección "Contenido relacionado" que incluye "8 archivos y 3 calificaciones", y el programa está tratando esas 3 calificaciones como actividades separadas.
+
+Tareas:
+
+Revisa backend/calificaciones.py (o donde se extraigan). Debe capturar todas las calificaciones reales de la materia, con su estructura: fecha, docente, nota, observaciones, detalles.
+
+Distingue entre actividades reales y bloques de "Contenido relacionado" o "Calificaciones" que aparecen al final de una unidad. No deben mezclarse.
+
+En la vista de calificaciones, muestra una tabla o lista clara con cada calificación (materia, actividad, nota, observación, fecha).
+
+Usa la página oficial con las credenciales para comparar y ajustar selectores.
+
+4. Descarga de comprobantes y archivos adjuntos
+Problema: Al hacer clic en "Comprobante" o enlaces de descarga en actividades, a veces no funciona o descarga un archivo sin extensión.
+
+Tareas:
+
+Revisa backend/programa.py y ui/curso_detail.py para la descarga de archivos. Asegúrate de obtener el nombre y extensión reales desde el Content-Disposition o desde el enlace. Si no hay extensión, intenta inferirla del tipo MIME.
+
+Corrige el botón "aquí" que no funciona (posiblemente un enlace mal parseado).
+
+Prueba descargando un archivo adjunto de una actividad entregada y verifica que se guarde con nombre correcto.
+
+🟠 Prioridad media (mejoras de experiencia de usuario)
+5. Asistente IA (trabado, animación, temas visuales)
+Problema: El asistente a veces se queda trabado, muestra "API externa Gémini activada" sin que el usuario la haya configurado (posiblemente quedó de una prueba), y el indicador "Asistente pensando..." no es satisfactorio. El usuario quiere una animación de tres puntitos (escribiendo). Además, la ventana de "Copiado" no combina con el tema.
+
+Tareas:
+
+Revisa ia/engine.py y la carga de API key. Asegúrate de que si no hay clave guardada o no es válida, el asistente funcione en modo local sin mostrar "API externa activada". Corrige el fallback.
+
+Implementa una animación de "escribiendo..." con tres puntos animados en la interfaz del chat (puedes usar un after para cambiar el texto entre ".", "..", "...").
+
+Mejora el estilo de la ventana de "Copiado" para que use los colores del tema actual.
+
+Prueba el asistente local con preguntas simples y verifica que no se congele.
+
+6. Cambio de tema (error al aplicar)
+Problema: Al intentar cambiar de color, salió error: Invalid command name... !ctkframe... option menu canvas...
+
+Tareas:
+
+Revisa ui/theme.py y config.py para la actualización dinámica de temas. El error sugiere que se está intentando acceder a un widget ya destruido o mal referenciado. Asegúrate de que al cambiar el tema se actualicen correctamente todos los widgets, sin errores.
+
+Prueba cambiar entre varios temas (oscuro, claro, y los personalizados) y verifica que no haya errores en consola ni en la UI.
+
+7. Nombres de temas más cortos
+Solicitud: El usuario quiere nombres más cortos y atractivos para los temas:
+
+"Océano profundo" → "Turquesa"
+
+"Atardecer carmesí" → "Púrpura"
+
+"Cyberpunk violeta" → "Neón"
+
+"Modo claro elegante" → "Modo claro"
+
+Revisa los demás y propón nombres cortos (máximo 2 palabras).
+
+Tarea: Modifica los nombres en config.py o ui/theme.py donde se definan los temas y actualiza la interfaz de selección.
+
+8. Icono en barra lateral (posición)
+Problema: El logo del instituto en la barra lateral (junto al nombre del instituto) está muy arriba; el usuario quiere que esté un poco más centrado y bajito.
+
+Tarea: Ajusta el layout en ui/main_view.py (o donde esté el header de la sidebar) para darle un margen superior adecuado y centrarlo mejor.
+
+9. Selección de texto en mensajes, chat y otras áreas
+Problema: No se puede seleccionar texto en los visores de mensajes, chat, novedades, etc.
+
+Tarea: Habilita la selección de texto en todos los CTkTextbox o widgets de solo lectura. Configura state="normal" para permitir selección pero no edición, o usa exportselection=True.
+
+🟡 Prioridad baja (detalles finales)
+10. Tutorial
+Estado: El usuario reporta que ahora funciona sin errores. Buen trabajo.
+
+Tarea: Asegúrate de que el tutorial se muestre correctamente en todos los temas y que el indicador de "visto" se guarde bien.
+
+11. Persistencia y caché inteligente
+Problema: Aunque el agente reportó mejoras, el usuario aún nota cierta lentitud al entrar a materias o cambiar secciones. Verifica que la caché se esté utilizando efectivamente cuando el autologueo está activo.
+
+Tarea: Revisa el flujo de carga de MainView y CursoDetailView. Si los datos ya están en cache_materias.json y no ha pasado el intervalo de actualización, no debería volver a scrapear. Optimiza los hilos y la concurrencia para que la interfaz responda rápido.
+
+12. Contenido relacionado en actividades
+Problema: El programa está listando como actividades los elementos de "Contenido relacionado" (por ejemplo, "3 calificaciones" aparece como si fuera una actividad). Debe separarse.
+
+Tarea: En backend/programa.py, al parsear la estructura de la materia, identifica y clasifica correctamente: Unidades → Actividades, y Unidades → Contenido relacionado (archivos y calificaciones). No deben mezclarse. Muestra "Contenido relacionado" como una sección aparte si es necesario.
+
+📋 Instrucciones finales
+Realiza una prueba integral con la cuenta 47123607 y la contraseña proporcionada.
+
+Enfócate en los puntos de prioridad alta primero.
+
+Al terminar, escribe en candela reporte.txt un informe detallado: qué corregiste, cómo lo hiciste, y resultados de las pruebas (incluye capturas de logs si es necesario).
+
+No dejes credenciales hardcodeadas ni archivos temporales con datos sensibles.
+
+Si tienes dudas sobre la estructura HTML de la plataforma, usa las credenciales para inspeccionar y ajustar los selectores.
+
+Espero tus resultados. China.
+

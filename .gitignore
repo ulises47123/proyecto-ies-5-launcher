@@ -1,0 +1,35 @@
+# Python y bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.spec
+
+# Entornos virtuales
+venv/
+env/
+ENV/
+.venv/
+
+# Logs y reportes locales
+logs/
+*.log
+candela reporte.txt
+
+# Archivos de depuración y pruebas
+debug_*.html
+pruebas/
+*.tmp
+
+# Claves y configuraciones locales/credenciales
+.env
+api_key
+creds
+cookies*
+deploy_key*
+id_ed25519*
+*.pub
+
+# IDE / Editores
+.vscode/
+.idea/
+*.swp
