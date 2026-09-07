@@ -13,12 +13,14 @@ Una aplicación de escritorio moderna desarrollada en Python con **CustomTkinter
 
 ## ✨ Características Principales
 
-- 🖥️ **Interfaz Gráfica Moderna:** Construida sobre CustomTkinter con diseño limpio, responsivo y selector de temas visuales.
+- 🖥️ **Interfaz Gráfica Moderna:** Construida sobre CustomTkinter con diseño limpio, fluido, cambio instantáneo de temas visuales y sin bloqueos de interfaz.
 - 🔐 **Gestión de Sesión & Autologin:** Almacenamiento seguro de credenciales con cifrado DPAPI en Windows y persistencia de cookies.
+- 📋 **Sección de Actividades Pendientes:** Monitoreo inteligente de entregas con prioridad estricta (1º Vencidas, 2º Que debo) y navegación directa al modal de la actividad dentro de la materia.
+- 🕒 **Formato Horario Flexible:** Visualización en formato 12 horas (AM/PM) configurable y persistente (o 24 horas estándar).
 - 🔔 **Bandeja del Sistema (System Tray):** Minimización en segundo plano con comprobación periódica de novedades y alertas nativas.
-- 📚 **Seguimiento de Materias y Calificaciones:** Listado completo de cursos, programas de estudio, unidades, actividades y notas.
-- 💬 **Mensajería Interna & Chat:** Consulta de correos internos y acceso integrado al chat de las materias.
-- 🤖 **Asistente Inteligente (IA):** Motor local de asistencia con opción de vincular claves de Google Gemini u OpenAI para consultas avanzadas.
+- 📚 **Seguimiento de Materias y Calificaciones:** Listado completo de cursos, programas de estudio interactivos por unidades, entrega de tareas, calificaciones y contactos docentes.
+- 💬 **Mensajería Interna & Adjuntos:** Bandeja de entrada, enviados, lectura completa y envío de mensajes con soporte para adjuntos.
+- 🤖 **Asistente Virtual & IA Avanzada:** Asistente integrado con soporte local, API externa (Gemini / OpenAI) e integración nativa con Google Antigravity CLI (AGY).
 
 ---
 

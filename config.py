@@ -19,6 +19,8 @@ CONFIG_DIR  = os.path.join(os.path.expanduser("~"), ".campus_tello")
 CREDS_FILE  = os.path.join(CONFIG_DIR, "creds")
 API_FILE    = os.path.join(CONFIG_DIR, "api")
 API_KEY_FILE= os.path.join(CONFIG_DIR, "api_key")
+GEMINI_KEY_FILE = os.path.join(CONFIG_DIR, "gemini_key")
+OPENAI_KEY_FILE = os.path.join(CONFIG_DIR, "openai_key")
 THEME_FILE  = os.path.join(CONFIG_DIR, "theme.json")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 CACHE_FILE          = os.path.join(CONFIG_DIR, "cache_materias.json")
@@ -27,17 +29,22 @@ USER_CACHE_FILE     = os.path.join(CONFIG_DIR, "user_cache.json")
 COOKIES_FILE        = os.path.join(CONFIG_DIR, "cookies.json")
 FB_CREDS_FILE       = os.path.join(CONFIG_DIR, "fb_creds")
 CACHE_SITIO_FILE    = os.path.join(CONFIG_DIR, "cache_sitio_informativo.json")
-CACHE_FB_FILE       = os.path.join(CONFIG_DIR, "cache_facebook.json")
 ESTADO_NOTIFS_FILE  = os.path.join(CONFIG_DIR, "estado_notificaciones.json")
 CACHE_SITIO_DIR     = os.path.join(CONFIG_DIR, "cache", "sitio")
-CACHE_FB_IMG_DIR    = os.path.join(CONFIG_DIR, "cache", "facebook", "imagenes")
 APP_DIR             = os.path.dirname(os.path.abspath(__file__))
 LOGS_DIR            = os.path.join(APP_DIR, "logs")
+DATA_DIR            = os.path.join(APP_DIR, "data")
+DATA_ORIGINAL_DIR   = os.path.join(DATA_DIR, "original_files")
+DATA_PROCESSED_DIR  = os.path.join(DATA_DIR, "processed")
+DATA_KB_DIR         = os.path.join(DATA_DIR, "knowledge_base")
+KB_JSON_FILE        = os.path.join(DATA_KB_DIR, "knowledge_base.json")
 
 os.makedirs(CONFIG_DIR, exist_ok=True)
 os.makedirs(CACHE_SITIO_DIR, exist_ok=True)
-os.makedirs(CACHE_FB_IMG_DIR, exist_ok=True)
 os.makedirs(LOGS_DIR, exist_ok=True)
+os.makedirs(DATA_ORIGINAL_DIR, exist_ok=True)
+os.makedirs(DATA_PROCESSED_DIR, exist_ok=True)
+os.makedirs(DATA_KB_DIR, exist_ok=True)
 
 # ── Temas predefinidos con alto contraste y legibilidad optimizada ──
 TEMAS_PREDEFINIDOS = {
@@ -189,7 +196,56 @@ DEFAULT_CONFIG = {
     "minimizar_al_cerrar": True,
     "notificaciones_activas": True,
     "tutorial_visto": False,
+    "solo_ia_api": False,  # True = Desactiva el bot local y usa exclusivamente modelos de IA API
+    "api_gemini_activa": True,
+    "api_openai_activa": True,
+    "bot_local_activo": True,
+    "usar_asistente_agy": False,  # Desmarcado por defecto en primer inicio
+    "monitorear_actividades_pendientes": True,
+    "intervalo_revision_actividades_dias": 1,  # días entre revisiones (1, 2, 3, 7)
+    "recordatorio_frecuente_vencimiento": True,  # insistencia cuando vence pronto
+    "intervalo_recordatorio_horas": 2,  # horas entre insistencias (1, 2, 4)
+    "formato_hora_12h": True,  # True = 12h (AM/PM), False = 24h
 }
+
+
+def formatear_hora_str(texto_con_hora: str, usar_12h: bool = None) -> str:
+    """
+    Convierte horas dentro de un texto a formato 12h (AM/PM) o 24h según la configuración.
+    Ejemplo: '09/09/2026 23:59' -> '09/09/2026 11:59 pm'
+             'Abierta hasta 19:01' -> 'Abierta hasta 07:01 pm'
+    """
+    if not texto_con_hora:
+        return ""
+    if usar_12h is None:
+        cfg = cargar_config()
+        usar_12h = cfg.get("formato_hora_12h", True)
+
+    import re
+
+    def _replace_24_to_12(match):
+        hh = int(match.group(1))
+        mm = match.group(2)
+        ampm = "am" if hh < 12 else "pm"
+        hh12 = hh % 12
+        if hh12 == 0:
+            hh12 = 12
+        return f"{hh12:02d}:{mm} {ampm}"
+
+    def _replace_12_to_24(match):
+        hh = int(match.group(1))
+        mm = match.group(2)
+        ampm = match.group(3).lower()
+        if ampm == "pm" and hh < 12:
+            hh += 12
+        elif ampm == "am" and hh == 12:
+            hh = 0
+        return f"{hh:02d}:{mm}"
+
+    if usar_12h:
+        return re.sub(r'\b([01]?\d|2[0-3]):([0-5]\d)(?!\s*(?:am|pm|AM|PM))\b', _replace_24_to_12, str(texto_con_hora))
+    else:
+        return re.sub(r'\b(0?[1-9]|1[0-2]):([0-5]\d)\s*(am|pm|AM|PM)\b', _replace_12_to_24, str(texto_con_hora))
 
 
 def cargar_config() -> dict:
@@ -429,16 +485,37 @@ def borrar_cookies_sesion():
             pass
 
 
+def tiene_sesion_guardada() -> bool:
+    """Devuelve True si existen credenciales o cookies guardadas para autologueo."""
+    u, p = cargar_creds()
+    if u and p:
+        return True
+    cookies = cargar_cookies_sesion()
+    return bool(cookies)
+
+
 # ── POLÍTICAS DE LIMPIEZA DE DATOS Y CACHÉ ──
 def limpiar_datos_sesion():
     """
     Política de Logout manual:
-    Elimina cookies guardadas, user_cache.json y credenciales en disco.
+    Elimina cookies guardadas, user_cache.json, credenciales en disco y sesión de AGY.
+    Conserva siempre el ejecutable agy.exe en disco.
     """
     borrar_cookies_sesion()
     borrar_creds()
     from backend.user import limpiar_user_cache
     limpiar_user_cache()
+    try:
+        from ia.agy_sidecar import borrar_sesion_agy
+        borrar_sesion_agy()
+    except Exception:
+        pass
+    try:
+        cfg = cargar_config()
+        cfg["usar_asistente_agy"] = False
+        guardar_config(cfg)
+    except Exception:
+        pass
 
 
 def limpiar_todas_caches():
@@ -476,26 +553,50 @@ def cargar_api():
 
 
 def guardar_api_key(clave: str):
-    """Cifra con DPAPI y guarda en ~/.campus_tello/api_key."""
+    """Cifra con DPAPI y guarda en ~/.campus_tello/api_key (Gemini principal)."""
+    guardar_gemini_key(clave)
+
+
+def cargar_api_key() -> str | None:
+    """Descifra y devuelve la clave API guardada (Gemini principal) o None."""
+    return cargar_gemini_key()
+
+
+def borrar_api_key():
+    """Elimina el archivo de clave API Gemini."""
+    borrar_gemini_key()
+
+
+def guardar_gemini_key(clave: str):
     try:
         payload = clave.strip().encode('utf-8')
         enc = _dpapi_encrypt(payload)
-        with open(API_KEY_FILE, "wb") as f:
+        with open(GEMINI_KEY_FILE, "wb") as f:
             f.write(enc)
         try:
-            os.chmod(API_KEY_FILE, 0o600)
+            os.chmod(GEMINI_KEY_FILE, 0o600)
         except Exception:
             pass
     except Exception:
         pass
 
 
-def cargar_api_key() -> str | None:
-    """Descifra y devuelve la clave API guardada con DPAPI o None si no existe."""
-    if not os.path.exists(API_KEY_FILE):
+def cargar_gemini_key() -> str | None:
+    if not os.path.exists(GEMINI_KEY_FILE):
+        # Fallback al archivo antiguo api_key si existe
+        if os.path.exists(API_KEY_FILE):
+            try:
+                with open(API_KEY_FILE, "rb") as f:
+                    raw = f.read()
+                dec = _dpapi_decrypt(raw)
+                val = dec.decode('utf-8', errors='ignore').strip()
+                if val:
+                    return val
+            except Exception:
+                pass
         return None
     try:
-        with open(API_KEY_FILE, "rb") as f:
+        with open(GEMINI_KEY_FILE, "rb") as f:
             raw = f.read()
         dec = _dpapi_decrypt(raw)
         val = dec.decode('utf-8', errors='ignore').strip()
@@ -504,11 +605,46 @@ def cargar_api_key() -> str | None:
         return None
 
 
-def borrar_api_key():
-    """Elimina el archivo de clave API cifrada."""
-    if os.path.exists(API_KEY_FILE):
+def borrar_gemini_key():
+    for path in [GEMINI_KEY_FILE, API_KEY_FILE]:
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+
+
+def guardar_openai_key(clave: str):
+    try:
+        payload = clave.strip().encode('utf-8')
+        enc = _dpapi_encrypt(payload)
+        with open(OPENAI_KEY_FILE, "wb") as f:
+            f.write(enc)
         try:
-            os.remove(API_KEY_FILE)
+            os.chmod(OPENAI_KEY_FILE, 0o600)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+def cargar_openai_key() -> str | None:
+    if not os.path.exists(OPENAI_KEY_FILE):
+        return None
+    try:
+        with open(OPENAI_KEY_FILE, "rb") as f:
+            raw = f.read()
+        dec = _dpapi_decrypt(raw)
+        val = dec.decode('utf-8', errors='ignore').strip()
+        return val if val else None
+    except Exception:
+        return None
+
+
+def borrar_openai_key():
+    if os.path.exists(OPENAI_KEY_FILE):
+        try:
+            os.remove(OPENAI_KEY_FILE)
         except Exception:
             pass
 
@@ -550,46 +686,7 @@ def cargar_estado_notifs() -> dict:
         return {"vistos": []}
 
 
-# ── PERSISTENCIA CREDENCIALES FACEBOOK (DPAPI) ──
-def guardar_fb_creds(usuario: str, clave: str):
-    """Guarda credenciales de Facebook cifradas con DPAPI."""
-    try:
-        payload = f"{usuario.strip()}\n{clave.strip()}".encode('utf-8')
-        enc = _dpapi_encrypt(payload)
-        with open(FB_CREDS_FILE, "wb") as f:
-            f.write(enc)
-        try:
-            os.chmod(FB_CREDS_FILE, 0o600)
-        except Exception:
-            pass
-    except Exception:
-        pass
-
-
-def cargar_fb_creds() -> tuple[str, str]:
-    """Carga y descifra las credenciales de Facebook."""
-    if not os.path.exists(FB_CREDS_FILE):
-        return "", ""
-    try:
-        with open(FB_CREDS_FILE, "rb") as f:
-            raw = f.read()
-        dec = _dpapi_decrypt(raw)
-        lines = dec.decode('utf-8', errors='ignore').splitlines()
-        return (lines[0].strip(), lines[1].strip()) if len(lines) >= 2 else ("", "")
-    except Exception:
-        return "", ""
-
-
-def borrar_fb_creds():
-    """Elimina las credenciales de Facebook guardadas."""
-    if os.path.exists(FB_CREDS_FILE):
-        try:
-            os.remove(FB_CREDS_FILE)
-        except Exception:
-            pass
-
-
-# ── CACHÉ SITIO INFORMATIVO Y FACEBOOK ──
+# ── CACHÉ SITIO INFORMATIVO ──
 def guardar_cache_sitio(data: dict):
     try:
         with open(CACHE_SITIO_FILE, "w", encoding="utf-8") as f:
@@ -605,74 +702,77 @@ def cargar_cache_sitio() -> dict:
         with open(CACHE_SITIO_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
-        return {}
-
-
-def guardar_cache_fb(data: dict):
-    try:
-        with open(CACHE_FB_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2, default=str)
-    except Exception:
         pass
+    return {}
 
 
-def cargar_cache_fb() -> dict:
-    if not os.path.exists(CACHE_FB_FILE):
-        return {}
-    try:
-        with open(CACHE_FB_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-def generar_archivo_informacion_desktop():
-    """Genera el archivo 'informacion.txt' en el escritorio del usuario según Requerimiento 3."""
+def generar_archivo_informacion_desktop(usuario: str = "", auto_login: bool = True):
+    """
+    Gestiona la persistencia según auto-logueo:
+    - Auto-logueo = True: datos persisten internamente, no se crea archivo en escritorio.
+    - Auto-logueo = False: se crea/actualiza archivo .txt en el escritorio con el nombre del estudiante.
+    """
     try:
         escritorio = os.path.join(os.path.expanduser("~"), "Desktop")
         if not os.path.exists(escritorio):
             escritorio = os.path.expanduser("~")
-        
-        target_path = os.path.join(escritorio, "informacion.txt")
-        
+
+        nombre_archivo = f"{usuario.strip() or 'informacion'}.txt"
+        target_path = os.path.join(escritorio, nombre_archivo)
+
+        if auto_login:
+            # Si auto-logueo está activo, no se debe generar/modificar archivo en el escritorio
+            return
+
+        cache = cargar_cache()
+        nombre_completo = cache.get("usuario") or usuario or "Estudiante"
+        carrera = cache.get("carrera", "IES N°5 'José E. Tello'")
+        cursos = cache.get("cursos", [])
+
+        mat_lines = []
+        for c in cursos:
+            nom = c.get("nombre", "")
+            av = c.get("avance", 0)
+            doc = c.get("docente", "A confirmar")
+            mat_lines.append(f"- {nom} (Avance: {av}%) | Docente: {doc}")
+
         contenido = (
-            "INFORMACIÓN DEL CAMPUS VIRTUAL\n"
-            "================================\n\n"
-            "1. DESCRIPCIÓN GENERAL\n"
-            "El programa permite acceder al campus virtual del I.E.S. Nº5 'José E. Tello' desde una interfaz de escritorio moderna y rápida.\n"
-            "Entre sus funciones principales destacan:\n"
-            "- Visualización y seguimiento de materias, clases y unidades académicas.\n"
-            "- Acceso a actividades, consignas, rúbricas y estados de entrega (🟢 Entregada / 🟠 Pendiente / 🔴 Cerrada).\n"
-            "- Mensajería interna (Webmail) con lectura completa de correos y archivos adjuntos.\n"
-            "- Notificaciones nativas de escritorio del sistema operativo ante novedades reales (2 minutos de duración).\n"
-            "- Asistente virtual inteligente (bot local con IA) con respuestas contextuales.\n\n"
-            "2. TECNOLOGÍAS UTILIZADAS\n"
-            "- Lenguaje: Python 3.11+\n"
-            "- Interfaz gráfica de usuario: CustomTkinter (con soporte para 8 temas personalizables de alto contraste)\n"
-            "- Conectividad HTTP: requests con adaptador de reintentos automáticos (HTTPAdapter con 3 reintentos y backoff)\n"
-            "- Procesamiento HTML: BeautifulSoup4 para extracción estructurada de contenidos del aula\n"
-            "- Almacenamiento en caché: Archivos JSON estructurados (cache_materias.json, cache_contactos.json, estado_notificaciones.json)\n"
-            "- Sistema de notificaciones: Plyer / Notificaciones nativas del SO con duración temporizada\n"
-            "- Imágenes y visualización: Pillow (PIL) y renderizado adaptativo\n\n"
-            "3. ASISTENTE VIRTUAL (BOT LOCAL)\n"
-            "Actualmente, el asistente local inteligente es capaz de:\n"
-            "- Responder datos personales del estudiante ('¿Cómo me llamo?', '¿Cuál es mi DNI?', '¿Quién soy?').\n"
-            "- Listar materias del ciclo lectivo actual junto con sus docentes a cargo y porcentaje de progreso.\n"
-            "- Consultar actividades pendientes y tareas entregadas por materia.\n"
-            "- Mostrar un resumen limpio de las novedades y avisos recientes del campus.\n"
-            "Todas las consultas se resuelven en milisegundos a través de los datos cacheados localmente.\n\n"
-            "4. POSIBLES MEJORAS CON IA EXTERNA\n"
-            "Si se activa una clave de API externa (Google Gemini o OpenAI GPT), el asistente puede expandir sus capacidades:\n"
-            "- Generar resúmenes automáticos y síntesis de lecturas obligatorias o unidades extensas.\n"
-            "- Explicar conceptos técnicos y algoritmos en lenguaje natural adaptado al nivel del estudiante.\n"
-            "- Resolver consultas complejas sobre consignas de trabajos prácticos.\n"
-            "- Sugerir bibliografía complementaria y guías de estudio personalizadas.\n"
+            f"INFORMACIÓN DEL ESTUDIANTE - CAMPUS VIRTUAL\n"
+            f"============================================\n\n"
+            f"Estudiante: {nombre_completo}\n"
+            f"Institución / Carrera: {carrera}\n"
+            f"Fecha de Exportación: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}\n\n"
+            f"MATERIAS REGISTRADAS:\n"
+            + ("\n".join(mat_lines) if mat_lines else "- No se registran materias sincronizadas aún.") + "\n\n"
+            f"ASISTENTE VIRTUAL Y SERVICIOS:\n"
+            f"- Base de conocimiento local activa en el sistema.\n"
+            f"- Integración con consultas académicas e institucionales.\n"
         )
-        
+
         with open(target_path, "w", encoding="utf-8") as f:
             f.write(contenido)
     except Exception:
         pass
+
+
+def borrar_archivo_informacion_desktop(usuario: str = ""):
+    """Borra el archivo .txt del escritorio cuando el usuario cierra sesión."""
+    try:
+        escritorio = os.path.join(os.path.expanduser("~"), "Desktop")
+        if not os.path.exists(escritorio):
+            escritorio = os.path.expanduser("~")
+
+        for fname in [f"{usuario.strip()}.txt", "informacion.txt"]:
+            if usuario or fname == "informacion.txt":
+                fpath = os.path.join(escritorio, fname)
+                if os.path.exists(fpath):
+                    try:
+                        os.remove(fpath)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
 
 
 

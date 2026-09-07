@@ -132,6 +132,10 @@ def get_mensajes_chat(sess, id_curso: str) -> dict:
         return {"disponible": False, "mensajes": [], "msg": f"Error: {e}"}
 
 
+# Alias de compatibilidad
+obtener_mensajes_chat = get_mensajes_chat
+
+
 def enviar_mensaje_chat(sess, id_curso: str, mensaje: str) -> tuple[bool, str]:
     """
     Envía un mensaje al chat general de la materia conectando a Firebase Firestore REST.

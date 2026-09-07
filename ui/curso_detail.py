@@ -29,13 +29,14 @@ from backend import cache_utils as chat_mod
 class CursoDetailView(ctk.CTkFrame):
     """Vista completa de una materia con sus sub-secciones."""
 
-    def __init__(self, parent, sess: CampusSession, curso: dict, on_back, cached_data: dict = None):
+    def __init__(self, parent, sess: CampusSession, curso: dict, on_back, cached_data: dict = None, actividad_inicial: dict = None):
         t = tema_actual()
         super().__init__(parent, fg_color=t["bg"])
         self.sess = sess
         self.curso = curso
         self.on_back = on_back
         self.cached_data = cached_data or {}
+        self.actividad_inicial = actividad_inicial
         self._current_tab = 0
         self._msg_loaded = False
         self._cal_loaded = False
@@ -43,25 +44,55 @@ class CursoDetailView(ctk.CTkFrame):
         self._chat_loaded = False
         self._contactos_data = None
         self._acordeon_estados = {}  # {unidad_id: bool_abierto}
+        self._current_bandeja = "Inbox"
+        self._selected_trash_ids = set()
+        self._trash_chk_widgets = []
+        self._destroyed = False
 
         self._build()
         registrar_listener_tema(self._on_tema_update)
         
-        # Si ya tenemos datos de programa en cache, cargarlos de inmediato
+        # Activar tab 0 de inicio y asegurar visibilidad
+        self._switch_tab(0)
+
+        # Carga dinámica del programa: si hay datos en caché, mostrarlos de inmediato
+        # y luego actualizar en segundo plano para que nunca quede información estática.
         if self.cached_data and self.cached_data.get("programa"):
             self._show_programa(self.cached_data["programa"])
+            self._actualizar_programa_background()
         else:
             self._load_programa()
 
+        # Si se solicitó abrir directamente una actividad específica (desde la sección Pendientes)
+        if self.actividad_inicial:
+            self.after(350, self._abrir_actividad_inicial)
+
+    def _abrir_actividad_inicial(self):
+        if not self.actividad_inicial or getattr(self, "_destroyed", False) or not self.winfo_exists():
+            return
+        act = self.actividad_inicial
+        tit = act.get("titulo", "Actividad").replace("⏰", "").replace("🔥", "").replace("✏️", "").strip()
+        item = {
+            "tipo": "actividad",
+            "titulo": tit,
+            "url": act.get("url", "")
+        }
+        self._abrir_item_programa(item)
+
     def destroy(self):
+        self._destroyed = True
         desregistrar_listener_tema(self._on_tema_update)
         super().destroy()
 
     def _on_tema_update(self, t):
+        if getattr(self, "_destroyed", False) or not self.winfo_exists():
+            return
         self.configure(fg_color=t["bg"])
-        self._refresh_ui()
+        self.after(50, self._refresh_ui)
 
     def _refresh_ui(self):
+        if getattr(self, "_destroyed", False) or not self.winfo_exists():
+            return
         for w in self.winfo_children():
             w.destroy()
         self._build()
@@ -125,6 +156,9 @@ class CursoDetailView(ctk.CTkFrame):
         self.page_contactos = ctk.CTkFrame(self.content_container, fg_color="transparent")
         self.page_chat = ctk.CTkFrame(self.content_container, fg_color="transparent")
 
+        # Asegurar que la pestaña 0 (Programa) esté empaquetada y visible por defecto
+        self.page_programa.pack(fill="both", expand=True)
+
     def _switch_tab(self, idx):
         self._current_tab = idx
         t = tema_actual()
@@ -145,6 +179,14 @@ class CursoDetailView(ctk.CTkFrame):
         # Mostrar la seleccionada
         if idx == 0:
             self.page_programa.pack(fill="both", expand=True)
+            try:
+                self.page_programa.update_idletasks()
+                if hasattr(self.page_programa, "_parent_canvas"):
+                    self.page_programa._parent_canvas.configure(
+                        scrollregion=self.page_programa._parent_canvas.bbox("all")
+                    )
+            except Exception:
+                pass
         elif idx == 1:
             self.page_mensajes.pack(fill="both", expand=True)
             if not self._msg_loaded:
@@ -166,7 +208,36 @@ class CursoDetailView(ctk.CTkFrame):
                 self._chat_loaded = True
                 self._load_chat()
 
+    def _guardar_programa_en_cache(self, unidades):
+        try:
+            from config import cargar_cache, guardar_cache
+            cache = cargar_cache() or {}
+            mats = cache.setdefault("materias_detalle", {})
+            cid = str(self.curso.get("id"))
+            entry = mats.setdefault(cid, {})
+            entry["id"] = cid
+            entry["nombre"] = self.curso.get("nombre")
+            entry["programa"] = unidades
+            guardar_cache(cache)
+        except Exception:
+            pass
+
     # ── PROGRAMA Y CLASES (ACORDEÓN) ──────────────────────────
+    def _actualizar_programa_background(self):
+        """Actualiza el programa en segundo plano para reflejar cambios dinámicos del campus."""
+        def run():
+            try:
+                unidades = prog_mod.get_programa(self.sess, self.curso["id"])
+                if getattr(self, "_destroyed", False) or not self.winfo_exists():
+                    return
+                if unidades:
+                    self._guardar_programa_en_cache(unidades)
+                    self.cached_data["programa"] = unidades
+                    self.after(0, self._show_programa, unidades)
+            except Exception:
+                pass
+        threading.Thread(target=run, daemon=True).start()
+
     def _load_programa(self):
         clear_frame(self.page_programa)
         lbl_cargando = make_label(self.page_programa, "⏳ Cargando programa y unidades...", tipo="subtitulo")
@@ -176,15 +247,26 @@ class CursoDetailView(ctk.CTkFrame):
         def run():
             try:
                 unidades = prog_mod.get_programa(self.sess, self.curso["id"])
+                if getattr(self, "_destroyed", False) or not self.winfo_exists():
+                    return
+                self._guardar_programa_en_cache(unidades)
+                self.cached_data["programa"] = unidades
                 self.after(0, self._show_programa, unidades)
             except Exception as e:
+                if getattr(self, "_destroyed", False) or not self.winfo_exists():
+                    return
                 self.after(0, self._show_error, self.page_programa, str(e))
 
         threading.Thread(target=run, daemon=True).start()
 
     def _show_programa(self, unidades):
+        if getattr(self, "_destroyed", False) or not self.winfo_exists():
+            return
         t = tema_actual()
         clear_frame(self.page_programa)
+
+        if self._current_tab == 0:
+            self.page_programa.pack(fill="both", expand=True)
 
         if not unidades:
             lbl = make_label(self.page_programa, "ℹ No hay contenido de programa disponible para esta materia.", tipo="subtitulo")
@@ -198,6 +280,16 @@ class CursoDetailView(ctk.CTkFrame):
                 self._acordeon_estados[uid] = (idx == 0)
 
             self._render_unidad_acordeon(self.page_programa, u, uid)
+
+        # Forzar actualización inmediata de geometría en CTkScrollableFrame
+        try:
+            self.page_programa.update_idletasks()
+            if hasattr(self.page_programa, "_parent_canvas"):
+                self.page_programa._parent_canvas.configure(
+                    scrollregion=self.page_programa._parent_canvas.bbox("all")
+                )
+        except Exception:
+            pass
 
     def _render_unidad_acordeon(self, parent, u: dict, uid: str):
         t = tema_actual()
@@ -428,13 +520,15 @@ class CursoDetailView(ctk.CTkFrame):
                         else:
                             new_w, new_h = orig_w, orig_h
 
-                        ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(new_w, new_h))
-                        
                         def mostrar_img():
-                            lbl_load.destroy()
-                            img_lbl = ctk.CTkLabel(container, image=ctk_img, text="")
-                            img_lbl.image = ctk_img
-                            img_lbl.pack(padx=8, pady=8)
+                            try:
+                                lbl_load.destroy()
+                                ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(new_w, new_h))
+                                img_lbl = ctk.CTkLabel(container, image=ctk_img, text="")
+                                img_lbl.image = ctk_img
+                                img_lbl.pack(padx=8, pady=8)
+                            except Exception:
+                                pass
                         
                         self.after(0, mostrar_img)
                     except Exception as ex:
@@ -801,31 +895,128 @@ class CursoDetailView(ctk.CTkFrame):
                 messagebox.showerror("Error de Descarga", f"No se pudo descargar el archivo:\n{e}")
 
     # ── MENSAJES ──────────────────────────────────────────────
-    def _load_mensajes(self):
+    def _load_mensajes(self, bandeja: str = None):
+        if bandeja:
+            self._current_bandeja = bandeja
         clear_frame(self.page_mensajes)
-        lbl_cargando = make_label(self.page_mensajes, "⏳ Cargando mensajes del webmail...", tipo="subtitulo")
+        lbl_cargando = make_label(self.page_mensajes, f"⏳ Cargando mensajes ({self._current_bandeja})...", tipo="subtitulo")
         lbl_cargando.pack(pady=20)
 
         def run():
             try:
-                msgs = msg_mod.get_mensajes(self.sess, self.curso["id"])
+                msgs = msg_mod.get_mensajes(self.sess, self.curso["id"], bandeja=self._current_bandeja)
+                if getattr(self, "_destroyed", False):
+                    return
                 self.after(0, self._show_mensajes, msgs)
             except Exception as e:
+                if getattr(self, "_destroyed", False):
+                    return
                 self.after(0, self._show_error, self.page_mensajes, str(e))
 
         threading.Thread(target=run, daemon=True).start()
 
     def _show_mensajes(self, msgs):
+        if getattr(self, "_destroyed", False) or not self.winfo_exists():
+            return
         t = tema_actual()
         clear_frame(self.page_mensajes)
+        self._selected_trash_ids.clear()
+        self._trash_chk_widgets = []
+
+        # Barra superior con Sub-bandejas y botón de Redactar
+        top_bar = ctk.CTkFrame(self.page_mensajes, fg_color="transparent")
+        top_bar.pack(fill="x", padx=4, pady=(4, 8))
+
+        # Selector de sub-bandejas: Recibidos, Enviados, Papelera
+        tabs_sub = ctk.CTkFrame(top_bar, fg_color="transparent")
+        tabs_sub.pack(side="left")
+
+        sub_bandejas = [
+            ("📥 Recibidos", "Inbox"),
+            ("📤 Enviados", "Outbox"),
+            ("🗑 Papelera", "Trash")
+        ]
+        for label, b_key in sub_bandejas:
+            is_active = (self._current_bandeja == b_key)
+            btn_b = make_btn(
+                tabs_sub, label,
+                command=lambda k=b_key: self._load_mensajes(bandeja=k),
+                tipo="primary" if is_active else "flat",
+                width=110, height=30
+            )
+            btn_b.pack(side="left", padx=(0, 6))
+
+        btn_redactar = make_btn(
+            top_bar, "✉ Redactar mensaje",
+            command=self._abrir_modal_redactar,
+            tipo="primary", width=150, height=30
+        )
+        btn_redactar.pack(side="right")
+
+        # Barra de acciones de papelera si estamos en Trash
+        if self._current_bandeja == "Trash":
+            trash_bar = ctk.CTkFrame(self.page_mensajes, fg_color=t["card"], corner_radius=8, border_color=t["border"])
+            trash_bar.pack(fill="x", padx=4, pady=(2, 10))
+            trash_inner = ctk.CTkFrame(trash_bar, fg_color="transparent")
+            trash_inner.pack(fill="x", padx=10, pady=8)
+
+            chk_all_var = ctk.BooleanVar(value=False)
+
+            def _toggle_all():
+                val = chk_all_var.get()
+                if val:
+                    for m in msgs:
+                        if m.get("id"):
+                            self._selected_trash_ids.add(str(m["id"]))
+                else:
+                    self._selected_trash_ids.clear()
+                for chk, mid in self._trash_chk_widgets:
+                    if val:
+                        chk.select()
+                    else:
+                        chk.deselect()
+
+            chk_all = ctk.CTkCheckBox(
+                trash_inner, text="Seleccionar todos",
+                variable=chk_all_var, command=_toggle_all,
+                font=ctk.CTkFont(family="Segoe UI", size=12)
+            )
+            chk_all.pack(side="left", padx=(0, 14))
+
+            btn_rest = make_btn(
+                trash_inner, "↩ Restaurar e-mails",
+                command=lambda: self._accion_papelera("restaurar"),
+                tipo="primary", width=135, height=28
+            )
+            btn_rest.pack(side="left", padx=4)
+
+            btn_elim_perm = make_btn(
+                trash_inner, "🗑 Eliminar permanentemente",
+                command=lambda: self._accion_papelera("eliminar"),
+                tipo="danger", width=175, height=28
+            )
+            btn_elim_perm.pack(side="left", padx=4)
+
+            btn_vaciar = make_btn(
+                trash_inner, "🧹 Vaciar la papelera",
+                command=lambda: self._accion_papelera("vaciar"),
+                tipo="flat", width=135, height=28
+            )
+            btn_vaciar.pack(side="right")
+
+        titulos_bandeja = {
+            "Inbox": "BANDEJA DE ENTRADA",
+            "Outbox": "MENSAJES ENVIADOS",
+            "Trash": "PAPELERA DE RECICLAJE"
+        }
+        nom_b = titulos_bandeja.get(self._current_bandeja, "MENSAJES")
+        lbl_hdr = make_label(self.page_mensajes, f"{nom_b} — {len(msgs)} MENSAJES", tipo="seccion")
+        lbl_hdr.pack(anchor="w", padx=6, pady=(4, 6))
 
         if not msgs:
-            lbl = make_label(self.page_mensajes, "ℹ No hay mensajes en la bandeja de esta materia.", tipo="subtitulo")
+            lbl = make_label(self.page_mensajes, f"ℹ No hay mensajes en {nom_b.lower()}.", tipo="subtitulo")
             lbl.pack(pady=20, padx=10)
             return
-
-        lbl_hdr = make_label(self.page_mensajes, f"BANDEJA DE ENTRADA — {len(msgs)} MENSAJES", tipo="seccion")
-        lbl_hdr.pack(anchor="w", padx=4, pady=(4, 10))
 
         for m in msgs:
             card = make_card(
@@ -838,6 +1029,19 @@ class CursoDetailView(ctk.CTkFrame):
 
             inner = ctk.CTkFrame(card, fg_color="transparent")
             inner.pack(fill="x", padx=14, pady=10)
+
+            # Checkbox si es papelera
+            if self._current_bandeja == "Trash":
+                mid = str(m.get("id", ""))
+                chk_v = ctk.BooleanVar(value=False)
+                def _on_chk_toggle(msg_id=mid, var=chk_v):
+                    if var.get():
+                        self._selected_trash_ids.add(msg_id)
+                    else:
+                        self._selected_trash_ids.discard(msg_id)
+                chk_item = ctk.CTkCheckBox(inner, text="", variable=chk_v, width=24, command=_on_chk_toggle)
+                chk_item.pack(side="left", padx=(0, 10))
+                self._trash_chk_widgets.append((chk_item, mid))
 
             asunto = m.get("asunto", "Sin asunto")
             remitente = m.get("remitente", "")
@@ -853,8 +1057,9 @@ class CursoDetailView(ctk.CTkFrame):
             sub_row = ctk.CTkFrame(left, fg_color="transparent")
             sub_row.pack(fill="x", pady=(4, 0))
 
+            lbl_pref = "Para: " if self._current_bandeja == "Outbox" else "De: "
             if remitente:
-                lbl_rem = make_label(sub_row, f"De: {remitente}", tipo="subtitulo")
+                lbl_rem = make_label(sub_row, f"{lbl_pref}{remitente}", tipo="subtitulo")
                 lbl_rem.pack(side="left")
 
             if fecha:
@@ -868,6 +1073,39 @@ class CursoDetailView(ctk.CTkFrame):
                 tipo="primary", width=80, height=30
             )
             btn_leer.pack(side="right", padx=(10, 0))
+
+    def _accion_papelera(self, accion: str):
+        ids = list(self._selected_trash_ids)
+        if accion in ("restaurar", "eliminar") and not ids:
+            messagebox.showwarning("Atención", "Debes seleccionar al menos un mensaje de la papelera.")
+            return
+
+        if accion == "vaciar":
+            if not messagebox.askyesno("Vaciar la papelera", "¿Estás seguro de que deseas vaciar completamente la papelera? Esta acción no se puede deshacer."):
+                return
+            def run_v():
+                ok, res = msg_mod.vaciar_papelera(self.sess, str(self.curso["id"]))
+                self.after(0, lambda: self._on_papelera_done(ok, res))
+            threading.Thread(target=run_v, daemon=True).start()
+        elif accion == "eliminar":
+            if not messagebox.askyesno("Confirmar Eliminación", f"¿Estás seguro de que deseas eliminar permanentemente {len(ids)} mensaje(s) seleccionado(s)?"):
+                return
+            def run_e():
+                ok, res = msg_mod.eliminar_permanente_papelera(self.sess, str(self.curso["id"]), ids)
+                self.after(0, lambda: self._on_papelera_done(ok, res))
+            threading.Thread(target=run_e, daemon=True).start()
+        elif accion == "restaurar":
+            def run_r():
+                ok, res = msg_mod.restaurar_mensajes_papelera(self.sess, str(self.curso["id"]), ids)
+                self.after(0, lambda: self._on_papelera_done(ok, res))
+            threading.Thread(target=run_r, daemon=True).start()
+
+    def _on_papelera_done(self, ok: bool, res: str):
+        if ok:
+            messagebox.showinfo("Éxito", res)
+            self._load_mensajes(bandeja="Trash")
+        else:
+            messagebox.showerror("Error", res)
 
     def _abrir_popup_mensaje(self, m: dict):
         """Abre un modal con el contenido completo del mensaje."""
@@ -887,24 +1125,9 @@ class CursoDetailView(ctk.CTkFrame):
         lbl_s = make_label(hdr, f"De: {m.get('remitente')}  |  Fecha: {m.get('fecha')}", tipo="subtitulo")
         lbl_s.pack(padx=20, pady=(0, 4), anchor="w")
 
-        # Barra de botones de acción visuales
+        # Barra de botones de acción
         actions_bar = ctk.CTkFrame(top, fg_color=t["card"], corner_radius=0)
         actions_bar.pack(fill="x", padx=0, pady=(0, 6))
-
-        def _accion_msg(nombre):
-            messagebox.showinfo(nombre, f"La acción '{nombre}' está en desarrollo y se conectará en la próxima actualización.")
-
-        btn_reply = make_btn(actions_bar, "↩ Responder", command=lambda: _accion_msg("Responder"), tipo="flat", height=28, width=95)
-        btn_reply.pack(side="left", padx=(16, 4), pady=4)
-
-        btn_fwd = make_btn(actions_bar, "↪ Reenviar", command=lambda: _accion_msg("Reenviar"), tipo="flat", height=28, width=90)
-        btn_fwd.pack(side="left", padx=4, pady=4)
-
-        btn_del = make_btn(actions_bar, "🗑 Eliminar", command=lambda: _accion_msg("Eliminar"), tipo="flat", height=28, width=85)
-        btn_del.pack(side="left", padx=4, pady=4)
-
-        btn_read = make_btn(actions_bar, "✉ Marcar leído", command=lambda: _accion_msg("Marcar como leído"), tipo="flat", height=28, width=105)
-        btn_read.pack(side="left", padx=4, pady=4)
 
         content = ctk.CTkScrollableFrame(top, fg_color=t["bg"])
         content.pack(fill="both", expand=True, padx=16, pady=6)
@@ -914,13 +1137,36 @@ class CursoDetailView(ctk.CTkFrame):
 
         def run():
             detalle = msg_mod.get_detalle_mensaje(self.sess, m.get("link", m.get("id", "")), self.curso["id"])
-            self.after(0, self._render_modal_mensaje, content, detalle, top)
+            self.after(0, self._render_modal_mensaje, content, detalle, top, actions_bar, m)
 
         threading.Thread(target=run, daemon=True).start()
 
-    def _render_modal_mensaje(self, parent, detalle: dict, top_win):
+    def _render_modal_mensaje(self, parent, detalle: dict, top_win, actions_bar, m: dict):
         t = tema_actual()
         clear_frame(parent)
+        clear_frame(actions_bar)
+
+        # Botones de acción 100% operativos
+        btn_reply = make_btn(
+            actions_bar, "↩ Responder",
+            command=lambda: self._abrir_modal_responder(detalle),
+            tipo="primary", height=28, width=95
+        )
+        btn_reply.pack(side="left", padx=(16, 6), pady=4)
+
+        btn_fwd = make_btn(
+            actions_bar, "↪ Reenviar",
+            command=lambda: self._abrir_modal_reenviar(detalle),
+            tipo="flat", height=28, width=90
+        )
+        btn_fwd.pack(side="left", padx=6, pady=4)
+
+        btn_del = make_btn(
+            actions_bar, "🗑 Eliminar",
+            command=lambda: self._confirmar_eliminar_mensaje(detalle, top_win),
+            tipo="danger", height=28, width=85
+        )
+        btn_del.pack(side="left", padx=6, pady=4)
 
         # Encabezado con datos del destinatario
         para_txt = detalle.get("para") or getattr(self.sess, "nombre", "") or getattr(self.sess, "usuario", "Estudiante")
@@ -979,6 +1225,480 @@ class CursoDetailView(ctk.CTkFrame):
         btn_close = make_btn(bot, "Cerrar", command=top_win.destroy, tipo="primary", height=34)
         btn_close.pack(fill="x")
 
+    def _abrir_modal_responder(self, detalle: dict):
+        t = tema_actual()
+        win = ctk.CTkToplevel(self)
+        win.title("Responder Mensaje")
+        win.geometry("580x480")
+        win.transient(self)
+        win.grab_set()
+
+        hdr = ctk.CTkFrame(win, fg_color=t["sidebar"], corner_radius=0)
+        hdr.pack(fill="x")
+        make_label(hdr, "↩ Responder Mensaje", tipo="titulo_sm").pack(padx=16, pady=(12, 2), anchor="w")
+        dest_txt = detalle.get("remitente", "Remitente")
+        dest_id = detalle.get("destinatario_id") or ""
+        lbl_sub_dest = f"Para: {dest_txt} ({dest_id})" if dest_id else f"Para: {dest_txt}"
+        make_label(hdr, lbl_sub_dest, tipo="subtitulo").pack(padx=16, pady=(0, 10), anchor="w")
+
+        body_f = ctk.CTkFrame(win, fg_color="transparent")
+        body_f.pack(fill="both", expand=True, padx=16, pady=10)
+
+        make_label(body_f, "Asunto:", tipo="seccion").pack(anchor="w", pady=(0, 2))
+        orig_asunto = detalle.get("asunto", "")
+        def_asunto = orig_asunto if orig_asunto.upper().startswith("RE:") else f"RE: {orig_asunto}"
+        ent_asunto = ctk.CTkEntry(body_f, height=34, fg_color=t["item_bg"])
+        ent_asunto.insert(0, def_asunto)
+        ent_asunto.pack(fill="x", pady=(0, 10))
+
+        make_label(body_f, "Mensaje de respuesta:", tipo="seccion").pack(anchor="w", pady=(0, 2))
+        txt_cuerpo = ctk.CTkTextbox(body_f, fg_color=t["item_bg"], wrap="word")
+        txt_cuerpo.pack(fill="both", expand=True, pady=(0, 10))
+        txt_cuerpo.focus()
+
+        lbl_estado_envio = make_label(body_f, "", tipo="subtitulo")
+        lbl_estado_envio.pack(anchor="w", pady=(0, 6))
+
+        btn_row = ctk.CTkFrame(body_f, fg_color="transparent")
+        btn_row.pack(fill="x")
+
+        def _do_send():
+            asunto = ent_asunto.get().strip()
+            cuerpo = txt_cuerpo.get("1.0", "end-1c").strip()
+            if not asunto:
+                messagebox.showwarning("Atención", "Por favor ingresa un asunto.")
+                return
+            if not cuerpo:
+                messagebox.showwarning("Atención", "Por favor escribe un mensaje de respuesta.")
+                return
+
+            target_id = dest_id or detalle.get("remitente", "")
+            btn_enviar.configure(state="disabled", text="⏳ Enviando...")
+            lbl_estado_envio.configure(text="⏳ Enviando respuesta al campus virtual...")
+
+            def send_task():
+                ok, msg_res = msg_mod.responder_mensaje(
+                    self.sess,
+                    str(self.curso["id"]),
+                    str(detalle.get("id", "")),
+                    target_id,
+                    asunto,
+                    cuerpo
+                )
+                def on_done():
+                    if ok:
+                        messagebox.showinfo("Éxito", "¡Respuesta enviada con éxito al campus virtual!")
+                        win.destroy()
+                    else:
+                        btn_enviar.configure(state="normal", text="Enviar Respuesta")
+                        lbl_estado_envio.configure(text=f"❌ {msg_res}")
+                        messagebox.showerror("Error al Enviar", msg_res)
+
+                self.after(0, on_done)
+
+            threading.Thread(target=send_task, daemon=True).start()
+
+        btn_cancel = make_btn(btn_row, "Cancelar", command=win.destroy, tipo="flat", height=32, width=90)
+        btn_cancel.pack(side="left")
+
+        btn_enviar = make_btn(btn_row, "Enviar Respuesta", command=_do_send, tipo="primary", height=32, width=130)
+        btn_enviar.pack(side="right")
+
+    def _abrir_modal_reenviar(self, detalle: dict):
+        t = tema_actual()
+        win = ctk.CTkToplevel(self)
+        win.title("Reenviar Mensaje")
+        win.geometry("580x520")
+        win.transient(self)
+        win.grab_set()
+
+        hdr = ctk.CTkFrame(win, fg_color=t["sidebar"], corner_radius=0)
+        hdr.pack(fill="x")
+        make_label(hdr, "↪ Reenviar Mensaje", tipo="titulo_sm").pack(padx=16, pady=(12, 2), anchor="w")
+        make_label(hdr, f"Mensaje original: {detalle.get('asunto', '')}", tipo="subtitulo").pack(padx=16, pady=(0, 10), anchor="w")
+
+        body_f = ctk.CTkFrame(win, fg_color="transparent")
+        body_f.pack(fill="both", expand=True, padx=16, pady=10)
+
+        make_label(body_f, "Destinatario (DNI o nombre de usuario):", tipo="seccion").pack(anchor="w", pady=(0, 2))
+        ent_dest = ctk.CTkEntry(body_f, height=34, fg_color=t["item_bg"], placeholder_text="Ej: 46174575 o usuario")
+        ent_dest.pack(fill="x", pady=(0, 10))
+
+        make_label(body_f, "Asunto:", tipo="seccion").pack(anchor="w", pady=(0, 2))
+        orig_asunto = detalle.get("asunto", "")
+        def_asunto = orig_asunto if orig_asunto.upper().startswith("RV:") else f"RV: {orig_asunto}"
+        ent_asunto = ctk.CTkEntry(body_f, height=34, fg_color=t["item_bg"])
+        ent_asunto.insert(0, def_asunto)
+        ent_asunto.pack(fill="x", pady=(0, 10))
+
+        make_label(body_f, "Nota adicional (opcional):", tipo="seccion").pack(anchor="w", pady=(0, 2))
+        txt_nota = ctk.CTkTextbox(body_f, fg_color=t["item_bg"], wrap="word", height=100)
+        txt_nota.pack(fill="both", expand=True, pady=(0, 10))
+
+        lbl_estado_reenvio = make_label(body_f, "", tipo="subtitulo")
+        lbl_estado_reenvio.pack(anchor="w", pady=(0, 6))
+
+        btn_row = ctk.CTkFrame(body_f, fg_color="transparent")
+        btn_row.pack(fill="x")
+
+        def _do_forward():
+            dest = ent_dest.get().strip()
+            asunto = ent_asunto.get().strip()
+            nota = txt_nota.get("1.0", "end-1c").strip()
+            if not dest:
+                messagebox.showwarning("Atención", "Por favor ingresa el destinatario para reenviar.")
+                return
+            if not asunto:
+                messagebox.showwarning("Atención", "Por favor ingresa un asunto.")
+                return
+
+            btn_fwd_send.configure(state="disabled", text="⏳ Reenviando...")
+            lbl_estado_reenvio.configure(text="⏳ Reenviando mensaje al campus virtual...")
+
+            def fwd_task():
+                ok, msg_res = msg_mod.reenviar_mensaje(
+                    self.sess,
+                    str(self.curso["id"]),
+                    str(detalle.get("id", "")),
+                    dest,
+                    asunto,
+                    nota
+                )
+                def on_done():
+                    if ok:
+                        messagebox.showinfo("Éxito", "¡Mensaje reenviado con éxito al campus virtual!")
+                        win.destroy()
+                    else:
+                        btn_fwd_send.configure(state="normal", text="Reenviar Mensaje")
+                        lbl_estado_reenvio.configure(text=f"❌ {msg_res}")
+                        messagebox.showerror("Error al Reenviar", msg_res)
+
+                self.after(0, on_done)
+
+            threading.Thread(target=fwd_task, daemon=True).start()
+
+        btn_cancel = make_btn(btn_row, "Cancelar", command=win.destroy, tipo="flat", height=32, width=90)
+        btn_cancel.pack(side="left")
+
+        btn_fwd_send = make_btn(btn_row, "Reenviar Mensaje", command=_do_forward, tipo="primary", height=32, width=130)
+        btn_fwd_send.pack(side="right")
+
+    def _confirmar_eliminar_mensaje(self, detalle: dict, top_win):
+        if messagebox.askyesno("Confirmar Eliminación", "¿Estás seguro de que deseas eliminar este mensaje?"):
+            def del_task():
+                ok, msg_res = msg_mod.eliminar_mensaje(
+                    self.sess,
+                    str(self.curso["id"]),
+                    str(detalle.get("id", "")),
+                    detalle.get("csrf_token", "")
+                )
+                def on_done():
+                    if ok:
+                        messagebox.showinfo("Mensaje Eliminado", "El mensaje fue movido a la papelera.")
+                        top_win.destroy()
+                        self._load_mensajes()
+                    else:
+                        messagebox.showerror("Error al Eliminar", msg_res)
+                self.after(0, on_done)
+
+            threading.Thread(target=del_task, daemon=True).start()
+
+    def _abrir_modal_selector_contactos(self, seleccionados_actuales: list[dict], on_done):
+        """
+        Abre el modal de selección de destinatarios para 'Para...'.
+        Permite buscar en tiempo real, filtrar por alumnos y docentes, seleccionar múltiples contactos y confirmar con Aceptar.
+        """
+        t = tema_actual()
+        top = ctk.CTkToplevel(self)
+        top.title("Seleccionar Destinatarios")
+        top.geometry("540x560")
+        top.transient(self)
+        top.grab_set()
+
+        hdr = ctk.CTkFrame(top, fg_color=t["sidebar"], corner_radius=0)
+        hdr.pack(fill="x")
+        make_label(hdr, "👥 Destinatarios — Para...", tipo="titulo_sm").pack(padx=16, pady=(12, 2), anchor="w")
+        make_label(hdr, "Selecciona los alumnos o docentes a quienes enviar el mensaje", tipo="subtitulo").pack(padx=16, pady=(0, 10), anchor="w")
+
+        body = ctk.CTkFrame(top, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=16, pady=10)
+
+        # Buscador en tiempo real
+        search_f = ctk.CTkFrame(body, fg_color="transparent")
+        search_f.pack(fill="x", pady=(0, 8))
+        ent_buscar = ctk.CTkEntry(search_f, height=32, placeholder_text="🔍 Buscar por nombre o apellido...")
+        ent_buscar.pack(fill="x")
+
+        # Accesos rápidos / filtros: Todos, Alumnos, Docentes
+        filtro_row = ctk.CTkFrame(body, fg_color="transparent")
+        filtro_row.pack(fill="x", pady=(0, 8))
+        make_label(filtro_row, "Accesos rápidos:", tipo="seccion").pack(side="left", padx=(0, 8))
+
+        filtro_actual = ["todos"]
+
+        btn_todos = make_btn(filtro_row, "Todos", tipo="primary", width=60, height=24)
+        btn_todos.pack(side="left", padx=2)
+        btn_alumnos = make_btn(filtro_row, "Alumnos", tipo="flat", width=75, height=24)
+        btn_alumnos.pack(side="left", padx=2)
+        btn_docentes = make_btn(filtro_row, "Docentes", tipo="flat", width=75, height=24)
+        btn_docentes.pack(side="left", padx=2)
+
+        scroll_dest = ctk.CTkScrollableFrame(body, fg_color=t["item_bg"], corner_radius=6)
+        scroll_dest.pack(fill="both", expand=True, pady=(0, 10))
+
+        # Mapa de IDs seleccionados
+        selected_map = {str(p["id"]): p for p in seleccionados_actuales if p.get("id")}
+        todos_contactos = []
+
+        def _render_lista():
+            clear_frame(scroll_dest)
+            filtro_t = filtro_actual[0]
+            query = ent_buscar.get().strip().lower()
+
+            encontrados = 0
+            for c in todos_contactos:
+                rol_c = c.get("rol", "").lower()
+                if filtro_t == "alumnos" and "alumno" not in rol_c:
+                    continue
+                if filtro_t == "docentes" and "docente" not in rol_c:
+                    continue
+                if query and query not in c.get("nombre", "").lower() and query not in c.get("email", "").lower():
+                    continue
+
+                encontrados += 1
+                cid = str(c.get("id", ""))
+                row = ctk.CTkFrame(scroll_dest, fg_color=t["card"], corner_radius=6)
+                row.pack(fill="x", pady=2, padx=4)
+
+                inner_r = ctk.CTkFrame(row, fg_color="transparent")
+                inner_r.pack(fill="x", padx=10, pady=6)
+
+                chk_var = ctk.BooleanVar(value=(cid in selected_map))
+
+                def _toggle(contact=c, var=chk_var):
+                    c_id = str(contact.get("id", ""))
+                    if var.get():
+                        selected_map[c_id] = contact
+                    else:
+                        selected_map.pop(c_id, None)
+
+                icon = "👨‍🏫" if "docente" in rol_c else "👤"
+                chk = ctk.CTkCheckBox(
+                    inner_r, text=f"{icon}  {c.get('nombre', '')}  ({c.get('rol', '')})",
+                    variable=chk_var, command=_toggle,
+                    font=ctk.CTkFont(family="Segoe UI", size=12)
+                )
+                chk.pack(side="left", fill="x", expand=True)
+
+            if encontrados == 0:
+                make_label(scroll_dest, "ℹ No se encontraron contactos coincidentes.", tipo="subtitulo").pack(pady=15)
+
+        def _set_filtro(f):
+            filtro_actual[0] = f
+            btn_todos.configure(tipo="primary" if f == "todos" else "flat")
+            btn_alumnos.configure(tipo="primary" if f == "alumnos" else "flat")
+            btn_docentes.configure(tipo="primary" if f == "docentes" else "flat")
+            _render_lista()
+
+        btn_todos.configure(command=lambda: _set_filtro("todos"))
+        btn_alumnos.configure(command=lambda: _set_filtro("alumnos"))
+        btn_docentes.configure(command=lambda: _set_filtro("docentes"))
+        ent_buscar.bind("<KeyRelease>", lambda e: _render_lista())
+
+        lbl_carg = make_label(scroll_dest, "⏳ Cargando contactos del aula...", tipo="subtitulo")
+        lbl_carg.pack(pady=20)
+
+        def _load():
+            nonlocal todos_contactos
+            try:
+                data = cont_mod.get_contactos(self.sess, self.curso["id"], obtener_detalles_completos=False)
+                docs = data.get("docentes", [])
+                alums = data.get("alumnos", [])
+                todos_contactos = docs + alums
+                self.after(0, _render_lista)
+            except Exception as e:
+                self.after(0, lambda: make_label(scroll_dest, f"Error: {e}", tipo="subtitulo").pack(pady=10))
+
+        threading.Thread(target=_load, daemon=True).start()
+
+        bot_f = ctk.CTkFrame(top, fg_color="transparent")
+        bot_f.pack(fill="x", padx=16, pady=(0, 12))
+
+        def _on_accept():
+            on_done(list(selected_map.values()))
+            top.destroy()
+
+        btn_cancel = make_btn(bot_f, "Cancelar", command=top.destroy, tipo="flat", height=32, width=90)
+        btn_cancel.pack(side="left")
+
+        btn_ok = make_btn(bot_f, "Aceptar", command=_on_accept, tipo="primary", height=32, width=110)
+        btn_ok.pack(side="right")
+
+    def _abrir_modal_redactar(self):
+        t = tema_actual()
+        win = ctk.CTkToplevel(self)
+        win.title("Enviar mensaje")
+        win.geometry("620x620")
+        win.transient(self)
+        win.grab_set()
+
+        hdr = ctk.CTkFrame(win, fg_color=t["sidebar"], corner_radius=0)
+        hdr.pack(fill="x")
+        make_label(hdr, "✉ Enviar mensaje", tipo="titulo_sm").pack(padx=16, pady=(12, 2), anchor="w")
+        make_label(hdr, f"Materia: {self.curso.get('nombre', '')}", tipo="subtitulo").pack(padx=16, pady=(0, 10), anchor="w")
+
+        body_f = ctk.CTkFrame(win, fg_color="transparent")
+        body_f.pack(fill="both", expand=True, padx=16, pady=10)
+
+        # Fila Para...
+        para_hdr_f = ctk.CTkFrame(body_f, fg_color="transparent")
+        para_hdr_f.pack(fill="x", pady=(0, 2))
+        make_label(para_hdr_f, "Para:", tipo="seccion").pack(side="left")
+
+        destinatarios_seleccionados = []  # list of dicts: [{"id":..., "nombre":...}]
+
+        def _actualizar_para(seleccionados):
+            nonlocal destinatarios_seleccionados
+            destinatarios_seleccionados = seleccionados
+            nombres = [p.get("nombre", "") for p in seleccionados]
+            texto_mostrar = "; ".join(nombres) if nombres else ""
+            ent_dest.configure(state="normal")
+            ent_dest.delete(0, "end")
+            ent_dest.insert(0, texto_mostrar)
+            ent_dest.configure(state="readonly")
+
+        btn_para = make_btn(
+            para_hdr_f, "Para...",
+            command=lambda: self._abrir_modal_selector_contactos(destinatarios_seleccionados, _actualizar_para),
+            tipo="primary", width=85, height=24
+        )
+        btn_para.pack(side="right")
+
+        ent_dest = ctk.CTkEntry(
+            body_f, height=34, fg_color=t["item_bg"],
+            placeholder_text="Presiona el botón 'Para...' para seleccionar alumnos o docentes"
+        )
+        ent_dest.configure(state="readonly")
+        ent_dest.pack(fill="x", pady=(0, 10))
+
+        # Asunto
+        make_label(body_f, "Asunto:", tipo="seccion").pack(anchor="w", pady=(0, 2))
+        ent_asunto = ctk.CTkEntry(body_f, height=34, fg_color=t["item_bg"], placeholder_text="Asunto del mensaje...")
+        ent_asunto.pack(fill="x", pady=(0, 10))
+
+        # Mensaje
+        make_label(body_f, "Mensaje:", tipo="seccion").pack(anchor="w", pady=(0, 2))
+        txt_cuerpo = ctk.CTkTextbox(body_f, fg_color=t["item_bg"], wrap="word", height=130)
+        txt_cuerpo.pack(fill="both", expand=True, pady=(0, 10))
+        ent_asunto.bind("<Return>", lambda _: txt_cuerpo.focus())
+        txt_cuerpo.focus()
+
+        # Adjuntos (Permitido hasta 30 MB)
+        adjunto_path = [None]
+
+        adj_frame = ctk.CTkFrame(body_f, fg_color=t["card"], corner_radius=6, border_width=1, border_color=t["border"])
+        adj_frame.pack(fill="x", pady=(0, 10))
+
+        adj_inner = ctk.CTkFrame(adj_frame, fg_color="transparent")
+        adj_inner.pack(fill="x", padx=10, pady=8)
+
+        lbl_adj_title = make_label(adj_inner, "Adjuntos (Permitido hasta 30 megabytes):", tipo="seccion")
+        lbl_adj_title.pack(anchor="w")
+
+        adj_info_row = ctk.CTkFrame(adj_inner, fg_color="transparent")
+        adj_info_row.pack(fill="x", pady=(4, 0))
+
+        lbl_adj_status = make_label(adj_info_row, "Sin archivo adjunto", tipo="subtitulo")
+        lbl_adj_status.pack(side="left", padx=(0, 10))
+
+        btn_quitar_adj = make_btn(adj_info_row, "❌ Quitar", command=None, tipo="danger", width=70, height=24)
+
+        def _quitar_archivo():
+            adjunto_path[0] = None
+            lbl_adj_status.configure(text="Sin archivo adjunto")
+            btn_quitar_adj.pack_forget()
+
+        btn_quitar_adj.configure(command=_quitar_archivo)
+
+        def _seleccionar_archivo():
+            ruta = filedialog.askopenfilename(title="Seleccionar archivo adjunto")
+            if ruta:
+                if not os.path.exists(ruta):
+                    return
+                tamanio = os.path.getsize(ruta)
+                if tamanio > 30 * 1024 * 1024:
+                    messagebox.showerror("Archivo demasiado grande", "El archivo supera el tamaño máximo permitido de 30 megabytes.")
+                    return
+                adjunto_path[0] = ruta
+                if tamanio < 1024:
+                    sz_str = f"{tamanio} B"
+                elif tamanio < 1024 * 1024:
+                    sz_str = f"{tamanio / 1024:.1f} KB"
+                else:
+                    sz_str = f"{tamanio / (1024 * 1024):.1f} MB"
+                nombre_f = os.path.basename(ruta)
+                lbl_adj_status.configure(text=f"📎 {nombre_f} ({sz_str})")
+                btn_quitar_adj.pack(side="left")
+
+        btn_sel_adj = make_btn(
+            adj_info_row, "📁 Buscar archivo...",
+            command=_seleccionar_archivo,
+            tipo="primary", width=125, height=24
+        )
+        btn_sel_adj.pack(side="right")
+
+        lbl_estado_envio = make_label(body_f, "", tipo="subtitulo")
+        lbl_estado_envio.pack(anchor="w", pady=(0, 6))
+
+        btn_row = ctk.CTkFrame(body_f, fg_color="transparent")
+        btn_row.pack(fill="x")
+
+        def _do_send_new():
+            if not destinatarios_seleccionados:
+                messagebox.showwarning("Atención", "Por favor selecciona al menos un destinatario usando el botón 'Para...'.")
+                return
+            asunto = ent_asunto.get().strip()
+            cuerpo = txt_cuerpo.get("1.0", "end-1c").strip()
+            if not asunto:
+                messagebox.showwarning("Atención", "Por favor ingresa un asunto.")
+                return
+            if not cuerpo:
+                messagebox.showwarning("Atención", "Por favor escribe el mensaje.")
+                return
+
+            dest_ids = [str(p["id"]) for p in destinatarios_seleccionados if p.get("id")]
+            btn_enviar.configure(state="disabled", text="⏳ Enviando...")
+            lbl_estado_envio.configure(text="⏳ Enviando mensaje al campus virtual...")
+
+            def send_task():
+                ok, msg_res = msg_mod.enviar_nuevo_mensaje(
+                    self.sess,
+                    str(self.curso["id"]),
+                    dest_ids,
+                    asunto,
+                    cuerpo,
+                    archivo_adjunto=adjunto_path[0]
+                )
+                def on_done():
+                    if ok:
+                        messagebox.showinfo("Mensaje Enviado", msg_res)
+                        win.destroy()
+                        self._load_mensajes()
+                    else:
+                        btn_enviar.configure(state="normal", text="Enviar Mensaje")
+                        lbl_estado_envio.configure(text=f"❌ {msg_res}")
+                        messagebox.showerror("Error al Enviar", msg_res)
+
+                self.after(0, on_done)
+
+            threading.Thread(target=send_task, daemon=True).start()
+
+        btn_cancel = make_btn(btn_row, "Cancelar", command=win.destroy, tipo="flat", height=32, width=90)
+        btn_cancel.pack(side="left")
+
+        btn_enviar = make_btn(btn_row, "Enviar Mensaje", command=_do_send_new, tipo="primary", height=32, width=130)
+        btn_enviar.pack(side="right")
+
     # ── CALIFICACIONES ────────────────────────────────────────
     def _load_calificaciones(self):
         clear_frame(self.page_calificaciones)
@@ -988,13 +1708,19 @@ class CursoDetailView(ctk.CTkFrame):
         def run():
             try:
                 cals = cal_mod.get_calificaciones(self.sess, self.curso["id"])
+                if getattr(self, "_destroyed", False):
+                    return
                 self.after(0, self._show_calificaciones, cals)
             except Exception as e:
+                if getattr(self, "_destroyed", False):
+                    return
                 self.after(0, self._show_error, self.page_calificaciones, str(e))
 
         threading.Thread(target=run, daemon=True).start()
 
     def _show_calificaciones(self, cals):
+        if getattr(self, "_destroyed", False) or not self.winfo_exists():
+            return
         t = tema_actual()
         clear_frame(self.page_calificaciones)
 
@@ -1053,13 +1779,19 @@ class CursoDetailView(ctk.CTkFrame):
         def run():
             try:
                 data = cont_mod.get_contactos(self.sess, self.curso["id"], obtener_detalles_completos=True)
+                if getattr(self, "_destroyed", False):
+                    return
                 self.after(0, self._show_contactos, data)
             except Exception as e:
+                if getattr(self, "_destroyed", False):
+                    return
                 self.after(0, self._show_error, self.page_contactos, str(e))
 
         threading.Thread(target=run, daemon=True).start()
 
     def _show_contactos(self, data):
+        if getattr(self, "_destroyed", False) or not self.winfo_exists():
+            return
         t = tema_actual()
         clear_frame(self.page_contactos)
         self._contactos_data = data
@@ -1105,6 +1837,53 @@ class CursoDetailView(ctk.CTkFrame):
             for p in alumnos:
                 self._render_persona(scroll_c, p, "👤", es_docente=False)
 
+    def _cargar_avatar_async(self, label_widget, url: str, size: tuple = (34, 34), fallback_text: str = "👤"):
+        if not url or not url.startswith("http"):
+            return
+
+        def _fetch():
+            try:
+                import hashlib
+                from config import CONFIG_DIR
+                avatars_dir = os.path.join(CONFIG_DIR, "avatars")
+                os.makedirs(avatars_dir, exist_ok=True)
+
+                clean_url = url.split("?")[0]
+                url_hi = url.replace("thumb_40x45.jpg", "thumb_80_90.jpg")
+                h = hashlib.md5(clean_url.encode("utf-8")).hexdigest()
+                cached_file = os.path.join(avatars_dir, f"{h}_{size[0]}.png")
+
+                if not os.path.exists(cached_file):
+                    r = None
+                    if "thumb_80_90.jpg" in url_hi:
+                        try:
+                            r = self.sess.get(url_hi, timeout=8)
+                        except Exception:
+                            r = None
+                    if not r or r.status_code != 200:
+                        r = self.sess.get(url, timeout=8)
+
+                    if r and r.status_code == 200 and len(r.content) > 100:
+                        img = Image.open(io.BytesIO(r.content)).convert("RGBA")
+                        img = img.resize(size, Image.LANCZOS)
+                        img.save(cached_file, "PNG")
+
+                if os.path.exists(cached_file):
+                    def _apply():
+                        try:
+                            pil_img = Image.open(cached_file).convert("RGBA")
+                            ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=size)
+                            label_widget.configure(image=ctk_img, text="")
+                            label_widget.image = ctk_img
+                        except Exception:
+                            pass
+
+                    self.after(0, _apply)
+            except Exception:
+                pass
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
     def _render_persona(self, parent, p, icon, es_docente=False):
         t = tema_actual()
         card = make_card(parent, fg_color=t["item_bg"], corner_radius=8, border_color=t["border"])
@@ -1120,6 +1899,10 @@ class CursoDetailView(ctk.CTkFrame):
 
         lbl_av = make_label(avatar_box, icon, tipo="blanco", anchor="center")
         lbl_av.pack(expand=True)
+
+        foto_url = p.get("foto_url")
+        if foto_url:
+            self._cargar_avatar_async(lbl_av, foto_url, size=(34, 34), fallback_text=icon)
 
         # Izquierda: Nombre y detalles
         left = ctk.CTkFrame(inner, fg_color="transparent")
@@ -1182,11 +1965,30 @@ class CursoDetailView(ctk.CTkFrame):
         hdr = ctk.CTkFrame(top, fg_color=t["sidebar"], corner_radius=0)
         hdr.pack(fill="x")
 
-        lbl_t = make_label(hdr, f"👤 {p.get('nombre', '')}", tipo="titulo_sm")
-        lbl_t.pack(padx=20, pady=(16, 2), anchor="w")
+        hdr_row = ctk.CTkFrame(hdr, fg_color="transparent")
+        hdr_row.pack(fill="x", padx=16, pady=12)
 
-        lbl_rol = make_label(hdr, f"Rol: {p.get('rol', 'Contacto')}", tipo="seccion")
-        lbl_rol.pack(padx=20, pady=(0, 14), anchor="w")
+        # Avatar modal
+        av_box_m = ctk.CTkFrame(hdr_row, width=50, height=50, fg_color=t["card"], corner_radius=25)
+        av_box_m.pack(side="left", padx=(0, 12))
+        av_box_m.pack_propagate(False)
+
+        def_icon = "👨‍🏫" if "docente" in p.get("rol", "").lower() else "👤"
+        lbl_av_m = make_label(av_box_m, def_icon, tipo="titulo", anchor="center")
+        lbl_av_m.pack(expand=True)
+
+        foto_url = p.get("foto_url")
+        if foto_url:
+            self._cargar_avatar_async(lbl_av_m, foto_url, size=(50, 50), fallback_text=def_icon)
+
+        hdr_info = ctk.CTkFrame(hdr_row, fg_color="transparent")
+        hdr_info.pack(side="left", fill="x", expand=True)
+
+        lbl_t = make_label(hdr_info, p.get('nombre', ''), tipo="titulo_sm", wrap=360)
+        lbl_t.pack(anchor="w")
+
+        lbl_rol = make_label(hdr_info, f"Rol: {p.get('rol', 'Contacto')}", tipo="seccion")
+        lbl_rol.pack(anchor="w", pady=(2, 0))
 
         content = ctk.CTkScrollableFrame(top, fg_color=t["bg"])
         content.pack(fill="both", expand=True, padx=16, pady=12)
@@ -1258,13 +2060,39 @@ class CursoDetailView(ctk.CTkFrame):
         def run():
             try:
                 mensajes = chat_mod.get_mensajes_chat(self.sess, self.curso["id"])
+                if getattr(self, "_destroyed", False):
+                    return
                 self.after(0, self._show_chat, mensajes)
             except Exception as e:
+                if getattr(self, "_destroyed", False):
+                    return
                 self.after(0, self._show_error, self.page_chat, str(e))
 
         threading.Thread(target=run, daemon=True).start()
 
+    def _forward_chat_scroll(self, event):
+        """Redirige el scroll de la rueda del ratón desde las burbujas al contenedor del chat."""
+        try:
+            delta = -1 * int(event.delta / 120) if event.delta else 1
+            if hasattr(self, "chat_scroll") and self.chat_scroll:
+                self.chat_scroll._parent_canvas.yview_scroll(delta, "units")
+        except Exception:
+            pass
+
+    def _bind_scroll_recursive(self, widget):
+        """Asocia recursivamente el evento de la rueda del ratón al contenedor de scroll."""
+        try:
+            widget.bind("<MouseWheel>", self._forward_chat_scroll)
+            if hasattr(widget, "_textbox"):
+                widget._textbox.bind("<MouseWheel>", self._forward_chat_scroll)
+        except Exception:
+            pass
+        for child in widget.winfo_children():
+            self._bind_scroll_recursive(child)
+
     def _show_chat(self, chat_data):
+        if getattr(self, "_destroyed", False) or not self.winfo_exists():
+            return
         t = tema_actual()
         clear_frame(self.page_chat)
 
@@ -1303,6 +2131,7 @@ class CursoDetailView(ctk.CTkFrame):
         # Scroll de mensajes de chat
         chat_scroll = ctk.CTkScrollableFrame(self.page_chat, fg_color=t["card"], corner_radius=10)
         chat_scroll.pack(fill="both", expand=True, padx=2, pady=(0, 10))
+        self.chat_scroll = chat_scroll
 
         if not mensajes:
             lbl_empty = make_label(chat_scroll, "ℹ No hay mensajes registrados en el chat de esta materia todavía.\n¡Sé el primero en saludar!", tipo="subtitulo")
@@ -1348,6 +2177,9 @@ class CursoDetailView(ctk.CTkFrame):
                 lbl_texto.insert("1.0", msg.get("texto", ""))
                 lbl_texto.configure(state="disabled")
                 lbl_texto.pack(fill="x", anchor="w")
+
+                # Bindeo recursivo de rueda del ratón para permitir scroll sobre toda la burbuja
+                self._bind_scroll_recursive(bubble)
 
         # Barra de envío de mensaje abajo
         input_frame = ctk.CTkFrame(self.page_chat, fg_color="transparent")
@@ -1395,7 +2227,13 @@ class CursoDetailView(ctk.CTkFrame):
         btn_send.pack(side="right")
 
     def _show_error(self, parent, msg):
-        clear_frame(parent)
-        lbl = make_label(parent, f"❌ Error al cargar datos: {msg}", tipo="error", wrap=500)
-        lbl.pack(pady=20, padx=10)
+        if getattr(self, "_destroyed", False) or not self.winfo_exists():
+            return
+        try:
+            if parent and parent.winfo_exists():
+                clear_frame(parent)
+                lbl = make_label(parent, f"❌ Error al cargar datos: {msg}", tipo="error", wrap=500)
+                lbl.pack(pady=20, padx=10)
+        except Exception:
+            pass
 

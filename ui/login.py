@@ -171,6 +171,10 @@ class LoginView(ctk.CTkFrame):
             self.entry_user.insert(0, u)
             self.entry_pass.insert(0, p)
             self.chk_auto.select()
+            from config import tiene_sesion_guardada
+            if tiene_sesion_guardada():
+                self.lbl_err.configure(text="⏳ Conectando automáticamente con el Campus...", text_color=t["muted"])
+                self.btn_login.configure(state="disabled", text="Ingresando automáticamente...")
 
     def _toggle_pass_visibility(self):
         if self.chk_show.get() == 1:

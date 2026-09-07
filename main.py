@@ -10,9 +10,50 @@ import time
 import datetime
 import logging
 import threading
+import socket
+import atexit
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+SINGLE_INSTANCE_PORT = 47125
+_global_tray_icon = None
+
+def _cleanup_tray():
+    global _global_tray_icon
+    if _global_tray_icon:
+        try:
+            _global_tray_icon.visible = False
+            _global_tray_icon.stop()
+        except Exception:
+            pass
+        _global_tray_icon = None
+
+atexit.register(_cleanup_tray)
+
+
+def check_single_instance() -> socket.socket:
+    """
+    Garantiza que solo exista una única instancia de la aplicación activa.
+    Si ya hay otra instancia ejecutándose, le solicita restaurar y enfocar su ventana,
+    luego finaliza este nuevo proceso.
+    """
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        server_socket.bind(("127.0.0.1", SINGLE_INSTANCE_PORT))
+        server_socket.listen(1)
+        return server_socket
+    except OSError:
+        # Ya existe una instancia activa escuchando en el puerto
+        try:
+            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client_socket.settimeout(2.0)
+            client_socket.connect(("127.0.0.1", SINGLE_INSTANCE_PORT))
+            client_socket.sendall(b"RESTAURAR\n")
+            client_socket.close()
+        except Exception:
+            pass
+        sys.exit(0)
 
 import customtkinter as ctk
 from ui.theme import aplicar_tema, tema_actual
@@ -94,6 +135,12 @@ from config import generar_archivo_informacion_desktop
 generar_archivo_informacion_desktop()
 
 try:
+    from ui.error_dialog import activar_dialogos_error_seleccionables
+    activar_dialogos_error_seleccionables()
+except Exception:
+    pass
+
+try:
     import pystray
     from pystray import MenuItem as item
 except ImportError:
@@ -108,11 +155,12 @@ ICON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Escudo-I.E
 
 
 class AppWindow(ctk.CTk):
-    def __init__(self, start_minimized: bool = False):
+    def __init__(self, start_minimized: bool = False, instance_socket: socket.socket = None):
         super().__init__()
         self.title("Campus Virtual — IES N°5 José Eugenio Tello")
         self.geometry("1100x720")
         self.minsize(850, 580)
+        self.instance_socket = instance_socket
 
         # Configurar icono si existe
         if os.path.exists(ICON_PATH):
@@ -135,6 +183,10 @@ class AppWindow(ctk.CTk):
         self.tray_icon = None
         self._loop_running = True
 
+        # Escuchar peticiones de restauración si otra instancia intenta abrirse
+        if self.instance_socket:
+            self._listen_single_instance()
+
         # Si se solicita inicio minimizado
         if start_minimized:
             self.withdraw()
@@ -154,8 +206,33 @@ class AppWindow(ctk.CTk):
         # Iniciar temporizador de actualización periódica en segundo plano
         self._iniciar_timer_actualizacion()
 
-        # Intentar restaurar sesión por cookies o autologin por credenciales
-        self._intentar_autologin_completo()
+        # Intentar restaurar sesión por cookies o autologin por credenciales de forma diferida
+        self.after(50, self._intentar_autologin_completo)
+
+    def _listen_single_instance(self):
+        def listener():
+            while self._loop_running and self.instance_socket:
+                try:
+                    self.instance_socket.settimeout(1.0)
+                    try:
+                        conn, _ = self.instance_socket.accept()
+                    except socket.timeout:
+                        continue
+                    except OSError:
+                        break
+                    data = conn.recv(1024)
+                    conn.close()
+                    if b"RESTAURAR" in data:
+                        self.after(0, self._restaurar_ventana)
+                except Exception:
+                    pass
+            try:
+                if self.instance_socket:
+                    self.instance_socket.close()
+            except Exception:
+                pass
+
+        threading.Thread(target=listener, daemon=True).start()
 
     def _on_tk_exception(self, exctype, value, tb):
         """Manejador de excepciones generadas dentro del loop de eventos de Tkinter."""
@@ -163,14 +240,22 @@ class AppWindow(ctk.CTk):
         err_msg = "".join(traceback.format_exception(exctype, value, tb))
         logging.error(f"Excepción en UI / Callback:\n{err_msg}")
         try:
-            from tkinter import messagebox
-            messagebox.showwarning(
+            from ui.error_dialog import mostrar_dialogo_error
+            mostrar_dialogo_error(
                 "Aviso de Operación",
-                f"Ocurrió un problema al procesar la acción:\n{value}\n\n"
-                "La aplicación continuará funcionando normalmente."
+                f"Ocurrió un problema al procesar la acción:\n{value}\n\nDetalle técnico:\n{err_msg}",
+                parent=self
             )
         except Exception:
-            pass
+            try:
+                from tkinter import messagebox
+                messagebox.showwarning(
+                    "Aviso de Operación",
+                    f"Ocurrió un problema al procesar la acción:\n{value}\n\n"
+                    "La aplicación continuará funcionando normalmente."
+                )
+            except Exception:
+                pass
 
     def _limpiar_vista(self):
         if self.current_view:
@@ -226,6 +311,10 @@ class AppWindow(ctk.CTk):
         self.campus_session = campus
         self.current_view = MainView(self, campus, on_logout=self._on_manual_logout)
         self.current_view.pack(fill="both", expand=True)
+        try:
+            self.update_idletasks()
+        except Exception:
+            pass
 
         # Si el usuario solicitó el tutorial y aún no lo vio en esta instalación
         if solicitar_tutorial and not tutorial_ya_visto():
@@ -239,7 +328,9 @@ class AppWindow(ctk.CTk):
 
     # ── BANDEJA DEL SISTEMA (SYSTEM TRAY) ────────────────────
     def _iniciar_tray_icon(self):
+        global _global_tray_icon
         def run_tray():
+            global _global_tray_icon
             try:
                 img = Image.open(ICON_PATH)
                 menu = pystray.Menu(
@@ -249,6 +340,7 @@ class AppWindow(ctk.CTk):
                     item('Salir', self._salir_definitivo)
                 )
                 self.tray_icon = pystray.Icon("CampusVirtualIES5", img, "Campus Virtual IES N°5", menu)
+                _global_tray_icon = self.tray_icon
                 self.tray_icon.run()
             except Exception:
                 pass
@@ -258,17 +350,8 @@ class AppWindow(ctk.CTk):
     def _on_close_window(self):
         cfg = cargar_config()
         if cfg.get("minimizar_al_cerrar", True) and self.tray_icon:
+            # Minimizar silenciosamente a la bandeja sin emitir notificaciones innecesarias
             self.withdraw()
-            if notification:
-                try:
-                    notification.notify(
-                        title="Campus Virtual IES N°5",
-                        message="La aplicación continúa ejecutándose en segundo plano.",
-                        app_name="Campus Virtual",
-                        timeout=3
-                    )
-                except Exception:
-                    pass
         else:
             self._salir_definitivo()
 
@@ -277,20 +360,35 @@ class AppWindow(ctk.CTk):
 
     def _restaurar_ventana(self):
         self.deiconify()
+        self.state("normal")
         self.lift()
         self.focus_force()
+        self.attributes("-topmost", True)
+        self.after(200, lambda: self.attributes("-topmost", False))
 
     def _trigger_actualizacion_tray(self, icon=None, item=None):
         if self.current_view and isinstance(self.current_view, MainView):
             self.after(0, self.current_view._refresh)
 
     def _salir_definitivo(self, icon=None, item=None):
+        global _global_tray_icon
         self._loop_running = False
         if self.tray_icon:
             try:
+                self.tray_icon.visible = False
                 self.tray_icon.stop()
             except Exception:
                 pass
+            self.tray_icon = None
+            _global_tray_icon = None
+
+        if self.instance_socket:
+            try:
+                self.instance_socket.close()
+            except Exception:
+                pass
+            self.instance_socket = None
+
         self.after(0, self.destroy)
         sys.exit(0)
 
@@ -317,7 +415,8 @@ class AppWindow(ctk.CTk):
 
 
 if __name__ == "__main__":
+    instance_sock = check_single_instance()
     start_min = "--minimized" in sys.argv or "-minimized" in sys.argv
-    app = AppWindow(start_minimized=start_min)
+    app = AppWindow(start_minimized=start_min, instance_socket=instance_sock)
     app.mainloop()
 
