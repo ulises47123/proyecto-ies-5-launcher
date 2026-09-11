@@ -45,6 +45,16 @@ function fmtFecha(fechaStr) {
     const [, yyyy, mm, dd, hh, min] = m;
     return `${dd.padStart(2,"0")}/${mm.padStart(2,"0")}/${yyyy} ${hh.padStart(2,"0")}:${min.padStart(2,"0")}`;
   }
+  // Try to parse as standard Date if not matched
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+  }
   return s;
 }
 

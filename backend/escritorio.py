@@ -38,46 +38,40 @@ def get_escritorio(sess: CampusSession, page_size: int = 120) -> tuple[list, lis
 
 
 def _parse_cursos(scripts: list[str]) -> list[dict]:
-    """Extrae la lista completa de cursos del script del escritorio."""
+    """Extrae la lista de cursos del script grande del escritorio."""
     for sc in scripts:
         if '"nombre"' not in sc or '"id"' not in sc or len(sc) < 1000:
             continue
+        m = re.search(r'(\[\{"cant_items_obl.*?\}\])', sc, re.DOTALL)
+        if not m:
+            m = re.search(r'(\[\{.*?"nombre".*?\}\])', sc, re.DOTALL)
+        if not m:
+            continue
+        try:
+            data = json.loads(m.group(1))
+            seen, result = set(), []
+            for c in data:
+                cid = str(c.get("id", ""))
+                if not cid or cid in seen:
+                    continue
+                seen.add(cid)
+                nom = c.get("nombre", "Sin nombre")
+                m_anio = re.search(r'\b(20\d\d)\b', nom)
+                anio = int(m_anio.group(1)) if m_anio else None
 
-        # Regex para capturar el arreglo JSON completo de cursos
-        candidates = re.findall(r'(\[\s*\{.*?"id"\s*:.*?"nombre"\s*:.*?\}\s*\])', sc, re.DOTALL)
-        if not candidates:
-            candidates = re.findall(r'(\[\s*\{.*?"cant_items_obl".*?\}\s*\])', sc, re.DOTALL)
-
-        for cand in candidates:
-            try:
-                data = json.loads(cand)
-                if isinstance(data, list) and len(data) > 0:
-                    seen, result = set(), []
-                    for c in data:
-                        if not isinstance(c, dict):
-                            continue
-                        cid = str(c.get("id", ""))
-                        if not cid or cid in seen:
-                            continue
-                        seen.add(cid)
-                        nom = c.get("nombre", "Sin nombre")
-                        m_anio = re.search(r'\b(20\d\d)\b', nom)
-                        anio = int(m_anio.group(1)) if m_anio else None
-
-                        result.append({
-                            "id":            cid,
-                            "nombre":        nom,
-                            "color":         c.get("color_curso", "#6366f1"),
-                            "avance":        c.get("avance", 70),
-                            "items_obl":     c.get("cant_items_obl", 0),
-                            "ultimo_acceso": c.get("ultimo_acceso", "Reciente"),
-                            "favorito":      bool(c.get("favorito")),
-                            "anio":          anio,
-                        })
-                    if result:
-                        return result
-            except (json.JSONDecodeError, Exception):
-                pass
+                result.append({
+                    "id":            cid,
+                    "nombre":        nom,
+                    "color":         c.get("color_curso", "#6366f1"),
+                    "avance":        c.get("avance", 70),
+                    "items_obl":     c.get("cant_items_obl", 0),
+                    "ultimo_acceso": c.get("ultimo_acceso", "Reciente"),
+                    "favorito":      bool(c.get("favorito")),
+                    "anio":          anio,
+                })
+            return result
+        except (json.JSONDecodeError, Exception):
+            pass
     return []
 
 
