@@ -698,7 +698,7 @@ async function cargarSubtabContactos(cursoId) {
       return `
         <div onclick="window.appBridgeUI.verContactoFicha('${p.id || pIdx}', '${cursoId}')" class="p-3 bg-midnight-base/80 border border-midnight-border rounded-xl flex items-center gap-3 hover:border-blue-500/40 cursor-pointer transition-all">
           <div class="w-10 h-10 rounded-full ${p.esDocente ? 'bg-blue-600/30 border-blue-400/40 text-blue-300' : 'bg-slate-700/40 border-slate-600 text-slate-300'} border flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
-            ${fotoUrl ? `<img src="${fotoUrl}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"/><span class="hidden">${iniciales}</span>` : `<span>${iniciales}</span>`}
+            ${fotoUrl && fotoUrl.length > 5 ? `<img src="${fotoUrl}" alt="${p.nombre}" class="w-full h-full object-cover" onerror="this.classList.add('hidden'); if(this.nextElementSibling) this.nextElementSibling.classList.remove('hidden');"/><span class="hidden">${iniciales}</span>` : `<span>${iniciales}</span>`}
           </div>
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">

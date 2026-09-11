@@ -32,10 +32,14 @@ def get_detalle_contacto(sess: CampusSession, id_curso: str, uid: str) -> dict:
 
         # 2. Foto
         foto_url = ""
-        img = soup.find('img', class_='perfil_imagen') or soup.find('img', class_=lambda c: c and 'foto' in c)
+        img = (
+            soup.find('img', class_=re.compile(r'perfil|foto|avatar|user', re.I)) or
+            soup.find('img', src=re.compile(r'foto|ver_foto|archivos|imagen|perfil', re.I)) or
+            soup.find('img')
+        )
         if img:
             foto_src = img.get('src', '')
-            if foto_src:
+            if foto_src and not any(k in foto_src.lower() for k in ['spacer', 'pixel', 'icon', 'blank', 'bullet']):
                 foto_url = foto_src if foto_src.startswith("http") else f"{BASE_URL}{foto_src.lstrip('/')}"
 
         # 3. Correo electrónico principal
@@ -170,7 +174,14 @@ def _parse_contactos(sess: CampusSession, html: str, id_curso: str, obtener_deta
                     uid = str(item.get("id_usuario", ""))
                     nombre = item.get("apellido_nombre") or item.get("nombre") or ""
                     telefono = item.get("telefono") or item.get("mobile") or ""
-                    foto = item.get("foto") or ""
+                    foto = (
+                        item.get("foto") or
+                        item.get("foto_url") or
+                        item.get("url_foto") or
+                        item.get("imagen") or
+                        item.get("avatar") or
+                        item.get("url_thumb") or ""
+                    )
                     if foto and not foto.startswith("http"):
                         foto = f"{BASE_URL}{foto.lstrip('/')}"
                     
@@ -203,7 +214,23 @@ def _parse_contactos(sess: CampusSession, html: str, id_curso: str, obtener_deta
                 rol = "Docente" if "docente" in str(tr).lower() else "Alumno"
                 inp = tr.find('input', {'type': 'checkbox'})
                 uid = inp.get('value', '') if inp else ''
-                persona = {"id": uid, "nombre": nombre, "rol": rol, "email": email, "telefono": "No especificado", "lugar": "No especificado", "foto_url": ""}
+
+                foto_src = ""
+                img_tag = tr.find('img')
+                if img_tag and img_tag.get('src'):
+                    s_url = img_tag.get('src')
+                    if s_url and not any(k in s_url.lower() for k in ['spacer', 'pixel', 'icon', 'blank', 'bullet']):
+                        foto_src = s_url if s_url.startswith("http") else f"{BASE_URL}{s_url.lstrip('/')}"
+
+                persona = {
+                    "id": uid,
+                    "nombre": nombre,
+                    "rol": rol,
+                    "email": email,
+                    "telefono": "No especificado",
+                    "lugar": "No especificado",
+                    "foto_url": foto_src
+                }
                 if rol == "Docente":
                     docentes.append(persona)
                 else:
