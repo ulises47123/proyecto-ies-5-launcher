@@ -298,8 +298,8 @@ export function renderPendientes() {
         </div>
         <div class="flex items-center gap-3 shrink-0">
           <span class="text-xs font-bold font-mono ${vencida ? 'text-rose-400' : 'text-amber-400'}">${plazo}</span>
-          <button onclick="window.appBridgeUI.irAMateriaDesdePendiente('${p.id_curso || ''}', '${p.url || ''}')" class="px-3.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-semibold text-xs rounded-lg flex items-center gap-1 transition-all cursor-pointer">
-            <span>Ir a materia &rarr;</span>
+          <button onclick="window.appBridgeUI.irAMateriaDesdePendiente('${p.id_curso || ''}', '${encodeURIComponent(p.url || '')}', '${encodeURIComponent(p.titulo || '')}')" class="px-3.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-semibold text-xs rounded-lg flex items-center gap-1 transition-all cursor-pointer">
+            <span>Ver actividad &rarr;</span>
           </button>
         </div>
       </div>
@@ -351,12 +351,14 @@ export function renderEstadisticas() {
   }
 
   container.innerHTML = appState.cursos.map((c) => {
-    const avance = c.avance !== undefined ? c.avance : 65;
+    const nombreMat = (c.nombre && c.nombre !== 'null') ? c.nombre : "Materia sin título";
+    const ultAcceso = (c.ultimo_acceso && c.ultimo_acceso !== 'null') ? c.ultimo_acceso : "—";
+    const avance = (c.avance !== undefined && c.avance !== null && c.avance !== 'null') ? c.avance : 65;
     return `
       <div class="bg-midnight-base/80 border border-midnight-border/70 rounded-xl p-3.5 flex items-center justify-between gap-4">
         <div class="min-w-0 flex-1">
-          <h5 class="text-xs font-bold text-white truncate">${c.nombre}</h5>
-          <span class="text-[10px] text-slate-400">Último acceso: ${c.ultimo_acceso || "Reciente"}</span>
+          <h5 class="text-xs font-bold text-white truncate">${nombreMat}</h5>
+          <span class="text-[10px] text-slate-400">Último acceso: ${ultAcceso}</span>
         </div>
         <div class="flex items-center gap-3 shrink-0">
           <div class="w-32 bg-midnight-card rounded-full h-2 overflow-hidden border border-midnight-border/60">
@@ -687,8 +689,10 @@ export function volverAMaterias() {
   showSection("materias");
 }
 
-export function irAMateriaDesdePendiente(cursoId, actUrl) {
-  if (cursoId) {
+export function irAMateriaDesdePendiente(cursoId, actUrl, actTitulo = "") {
+  if (actUrl) {
+    verDetalleItem(actUrl, actTitulo || "Detalle de Pendiente");
+  } else if (cursoId) {
     abrirCursoDetalle(cursoId);
   } else {
     showSection("materias");

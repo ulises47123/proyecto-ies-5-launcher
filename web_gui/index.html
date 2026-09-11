@@ -71,9 +71,9 @@
   <!-- ==================== PANTALLA DE LOGIN ==================== -->
   <div id="view-login" class="fixed inset-0 z-50 bg-[#0e1626] flex items-center justify-center p-4">
     <div class="absolute inset-0 grid-pattern opacity-20 pointer-events-none"></div>
-    <div class="relative w-full max-w-md bg-midnight-card border border-midnight-border rounded-2xl p-8 shadow-2xl backdrop-blur-xl">
+    <div class="relative w-full max-w-md bg-midnight-card border border-midnight-border rounded-2xl p-8 shadow-2xl">
       <div class="text-center mb-6">
-        <div class="w-20 h-20 rounded-2xl bg-midnight-sidebar/90 border border-midnight-border flex items-center justify-center p-2.5 mx-auto mb-3 shadow-xl shadow-black/40 backdrop-blur-sm">
+        <div class="w-20 h-20 rounded-2xl bg-midnight-sidebar border border-midnight-border flex items-center justify-center p-2.5 mx-auto mb-3 shadow-xl shadow-black/40">
           <img src="Escudo-I.E.S.-N-5.png" alt="Escudo IES N°5" class="w-full h-full object-contain drop-shadow-md"/>
         </div>
         <h1 class="text-2xl font-bold text-white tracking-tight">IES N°5 José E. Tello</h1>
@@ -367,12 +367,12 @@
             <div class="bg-midnight-card border border-midnight-border rounded-xl p-4 flex flex-col justify-between shadow-md">
               <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Materias Cursadas</span>
               <span class="text-2xl font-black text-white mt-1" id="stat-materias-count">0 Asignaturas</span>
-              <span class="text-[11px] text-blue-400 mt-2">100% Cursando Regular</span>
+              <span class="text-[11px] text-blue-400 mt-2">Inscripto en Aula Virtual</span>
             </div>
             <div class="bg-midnight-card border border-midnight-border rounded-xl p-4 flex flex-col justify-between shadow-md">
-              <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Actividades Completadas</span>
-              <span class="text-2xl font-black text-emerald-400 mt-1">100%</span>
-              <span class="text-[11px] text-emerald-400 mt-2">Condición Regular</span>
+              <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Porcentaje Aprobación</span>
+              <span class="text-2xl font-black text-emerald-400 mt-1" id="stat-porcentaje-aprob">100%</span>
+              <span class="text-[11px] text-emerald-400 mt-2">Cumplimiento de Cursada</span>
             </div>
             <div class="bg-midnight-card border border-midnight-border rounded-xl p-4 flex flex-col justify-between shadow-md">
               <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tareas Pendientes</span>
@@ -380,9 +380,9 @@
               <span class="text-[11px] text-amber-300 mt-2">Sincronizadas con aula</span>
             </div>
             <div class="bg-midnight-card border border-midnight-border rounded-xl p-4 flex flex-col justify-between shadow-md">
-              <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Asistencia Promedio</span>
-              <span class="text-2xl font-black text-cyan-300 mt-1">92%</span>
-              <span class="text-[11px] text-cyan-300 mt-2">Condición de Regularidad OK</span>
+              <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Estado de Asistencia</span>
+              <span class="text-2xl font-black text-cyan-300 mt-1" id="stat-asistencia-val">Regular</span>
+              <span class="text-[11px] text-cyan-300 mt-2">Asistencia al Día</span>
             </div>
           </div>
 
