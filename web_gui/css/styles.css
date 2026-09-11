@@ -66,6 +66,27 @@
   --status-online: #10b981;
 }
 
+[data-theme="light"] {
+  --bg-base: #f8fafc;
+  --bg-sidebar: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --bg-input: #f8fafc;
+  --border-color: #e2e8f0;
+  --border-bright: #cbd5e1;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-glow: rgba(79, 70, 229, 0.15);
+  --accent: #0284c7;
+  --accent-glow: rgba(2, 132, 199, 0.15);
+  --gradient-main: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #0284c7 100%);
+  --gradient-card: linear-gradient(135deg, rgba(79, 70, 229, 0.05) 0%, rgba(124, 58, 237, 0.02) 100%);
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --text-dim: #64748b;
+  --status-online: #10b981;
+}
+
 /* ── Base Reset & Font Styling ── */
 body {
   background-color: var(--bg-base);
@@ -96,7 +117,7 @@ input:focus, select:focus, textarea:focus {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.05);
 }
 ::-webkit-scrollbar-thumb {
   background: var(--border-color);
@@ -114,11 +135,16 @@ input:focus, select:focus, textarea:focus {
   scrollbar-width: none;
 }
 
-/* ── Card Utilities ── */
+/* ── Tab Switching & Card Utilities (Instantaneous Composite Transitions) ── */
+.tab-content {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
 .glass-panel {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.08);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   transform: translateZ(0);
 }
@@ -130,14 +156,14 @@ input:focus, select:focus, textarea:focus {
 .glass-card-interactive {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+  transition: transform 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
   transform: translateZ(0);
 }
 .glass-card-interactive:hover {
   background: var(--bg-card-hover);
   border-color: var(--border-bright);
   transform: translateY(-2px) translateZ(0);
-  box-shadow: 0 12px 24px -6px var(--primary-glow);
+  box-shadow: 0 8px 16px -4px var(--primary-glow);
 }
 
 /* ── Gradient Text & Animations ── */

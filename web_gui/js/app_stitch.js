@@ -23,6 +23,13 @@ const CURSO_COLORS = [
   "#6366f1", "#06b6d4", "#10b981", "#8b5cf6", "#f59e0b", "#f43f5e", "#ec4899", "#3b82f6"
 ];
 
+// Helper global para evitar mostrar "null" en la interfaz
+function cleanText(val, fallback = "—") {
+  if (val === null || val === undefined || val === "null" || val === "undefined") return fallback;
+  const s = String(val).trim();
+  return s ? s : fallback;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   console.log("[AppStitch] Inicializando interfaz oficial v3.0...");
 
@@ -152,7 +159,6 @@ export function aplicarTemaVisual(tema) {
 
 export async function cargarTodoElCampus(forzar = false) {
   mostrarIndicadorCarga(true);
-  switchTab("escritorio");
 
   try {
     // 1. Perfil del estudiante
@@ -201,14 +207,17 @@ export async function cargarTodoElCampus(forzar = false) {
     renderPendientes();
     renderNovedades();
     actualizarBadgesSidebar();
+    renderCalificacionesGenerales();
 
-    // Si hay un curso disponible, cargar el primero por defecto
+    // Si hay un curso disponible, seleccionar el primero y cargar sus datos
     if (appState.cursos.length > 0) {
-      const primerCursoId = appState.cursos[0].id;
-      appState.cursoActivo = appState.cursos[0];
-      cargarProgramaCurso(primerCursoId);
-      cargarContactosCurso(primerCursoId);
-      cargarCalificacionesCurso(primerCursoId);
+      const primerCurso = appState.cursos[0];
+      appState.cursoActivo = primerCurso;
+      const nombreEl = document.getElementById("curso-detail-nombre");
+      if (nombreEl) nombreEl.innerText = primerCurso.nombre;
+      cargarProgramaCurso(primerCurso.id);
+      cargarContactosCurso(primerCurso.id);
+      cargarCalificacionesCurso(primerCurso.id);
     }
 
   } catch (err) {
@@ -230,7 +239,7 @@ function actualizarPerfilUI(u) {
   const dashFirstname = document.getElementById("dash-user-firstname");
   const cfgUser = document.getElementById("cfg-user-info");
 
-  const nombreCompleto = u.nombre || u.usuario || "Estudiante";
+  const nombreCompleto = cleanText(u.nombre || u.usuario, "Estudiante");
   const primerNombre = nombreCompleto.split(" ")[0];
 
   if (topName) topName.innerText = nombreCompleto;
@@ -240,7 +249,7 @@ function actualizarPerfilUI(u) {
 
   if (topUserSec) topUserSec.classList.remove("hidden");
 
-  if (u.foto_url) {
+  if (u.foto_url && u.foto_url !== 'null') {
     if (topAvatar) topAvatar.src = u.foto_url;
     if (sideAvatar) sideAvatar.src = u.foto_url;
   }
@@ -256,7 +265,7 @@ function poblarSelectorCursos() {
   }
 
   dropdown.innerHTML = appState.cursos.map(c => `
-    <option value="${c.id}">${c.nombre}</option>
+    <option value="${c.id}">${cleanText(c.nombre, 'Materia')}</option>
   `).join("");
 }
 
@@ -269,9 +278,11 @@ function actualizarBadgesSidebar() {
 }
 
 export function switchTab(tabName) {
-  // Ocultar todos los contenedores de pestañas
+  // Ocultar todos los contenedores de pestañas instantáneamente sin reflow
   const tabs = document.querySelectorAll(".tab-content");
-  tabs.forEach(t => t.classList.add("hidden"));
+  tabs.forEach(t => {
+    if (!t.classList.contains("hidden")) t.classList.add("hidden");
+  });
 
   // Mostrar el contenedor seleccionado
   const targetTab = document.getElementById(`tab-${tabName}`);
@@ -280,18 +291,50 @@ export function switchTab(tabName) {
   // Desactivar estilo activo de todos los botones de la barra lateral
   const navBtns = document.querySelectorAll(".nav-btn");
   navBtns.forEach(btn => {
-    btn.className = "nav-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-midnight-card transition-all cursor-pointer";
+    btn.className = "nav-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-midnight-card transition-colors cursor-pointer";
   });
 
   // Activar estilo en el botón seleccionado
   const activeBtn = document.getElementById(`btn-nav-${tabName}`);
   if (activeBtn) {
-    activeBtn.className = "nav-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold text-indigo-400 bg-indigo-500/10 border border-indigo-500/30 shadow-sm transition-all cursor-pointer";
+    activeBtn.className = "nav-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold text-indigo-400 bg-indigo-500/10 border border-indigo-500/30 shadow-sm transition-colors cursor-pointer";
   }
 
   // Carga diferida de datos según la pestaña activa
   if (tabName === "novedades" && appState.novedades.length === 0) {
     cargarSitioNoticias();
+  } else if (tabName === "calificaciones") {
+    renderCalificacionesGenerales();
+  }
+}
+
+export function switchCursoSubtab(subtabName) {
+  // Alternar sub-pestañas dentro del detalle de la materia (Programa, Miembros, Calificaciones)
+  const subtabs = document.querySelectorAll(".subtab-content");
+  subtabs.forEach(st => st.classList.add("hidden"));
+
+  const targetSubtab = document.getElementById(`subtab-${subtabName}`);
+  if (targetSubtab) targetSubtab.classList.remove("hidden");
+
+  // Actualizar estilos de los botones de sub-pestaña
+  ["programa", "contactos", "calificaciones"].forEach(st => {
+    const btn = document.getElementById(`btn-subtab-${st}`);
+    if (btn) {
+      if (st === subtabName) {
+        btn.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-sm transition-all cursor-pointer";
+      } else {
+        btn.className = "px-3 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition-all cursor-pointer";
+      }
+    }
+  });
+
+  // Cargar datos diferidos si se selecciona la sub-pestaña de miembros o calificaciones
+  if (appState.cursoActivo) {
+    if (subtabName === "contactos") {
+      cargarContactosCurso(appState.cursoActivo.id);
+    } else if (subtabName === "calificaciones") {
+      cargarCalificacionesCurso(appState.cursoActivo.id);
+    }
   }
 }
 
@@ -324,16 +367,17 @@ export function renderMaterias() {
   }
 
   const itemsHtml = appState.cursos.map((c) => {
-    const avance = c.avance !== undefined ? c.avance : 70;
-    const ultAcceso = c.ultimo_acceso || "Reciente";
+    const avance = c.avance !== undefined && c.avance !== null ? c.avance : 70;
+    const ultAcceso = cleanText(c.ultimo_acceso, "Reciente");
     const novedadTxt = c.items_obl ? `${c.items_obl} actividades` : "Al día";
+    const nomMat = cleanText(c.nombre, "Materia");
 
     return `
       <div class="glass-card-interactive p-5 rounded-2xl space-y-3">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <span class="w-3.5 h-3.5 rounded-full shadow-sm" style="background-color: ${c.color}"></span>
-            <span class="text-xs font-bold text-white leading-snug">${c.nombre}</span>
+            <span class="text-xs font-bold text-white leading-snug">${nomMat}</span>
           </div>
         </div>
         <div class="flex items-center justify-between text-xs text-slate-300">
@@ -377,9 +421,9 @@ async function cargarProgramaCurso(cursoId) {
         <div class="p-4 rounded-2xl bg-midnight-card border border-midnight-border space-y-2">
           <h4 class="text-xs font-bold text-white flex items-center gap-2">
             <span class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px]">Unidad ${idx + 1}</span>
-            <span>${u.nombre || u.titulo || 'Contenido Temático'}</span>
+            <span>${cleanText(u.nombre || u.titulo, 'Contenido Temático')}</span>
           </h4>
-          <p class="text-[11px] text-slate-300">${u.descripcion || 'Material didáctico y clases de la asignatura.'}</p>
+          <p class="text-[11px] text-slate-300">${cleanText(u.descripcion, 'Material didáctico y clases de la asignatura.')}</p>
         </div>
       `).join("");
     }
@@ -408,17 +452,17 @@ export function renderPendientes() {
   const itemsHtml = appState.pendientes.map((p) => {
     const vencida = p.vencida || false;
     const badgeStyle = vencida ? "bg-rose-500/20 text-rose-300 border-rose-500/40" : "bg-amber-500/20 text-amber-300 border-amber-500/40";
-    const plazo = p.tiempo_restante_str || p.fecha_limite || "Consultar en el aula";
+    const plazo = cleanText(p.tiempo_restante_str || p.fecha_limite, "Consultar en el aula");
 
     return `
       <div class="p-4 rounded-2xl bg-midnight-card border border-midnight-border space-y-2 hover:border-indigo-500/40 transition-all">
         <div class="flex items-center justify-between gap-2">
-          <span class="text-xs font-bold text-indigo-400 truncate">${p.curso_nombre || "Materia"}</span>
+          <span class="text-xs font-bold text-indigo-400 truncate">${cleanText(p.curso_nombre, "Materia")}</span>
           <span class="px-2.5 py-0.5 rounded-full border text-[10px] font-bold ${badgeStyle}">
             ${vencida ? "Vencida" : "Pendiente"}
           </span>
         </div>
-        <h4 class="text-xs font-bold text-white">${p.titulo || "Consigna de Trabajo Práctico"}</h4>
+        <h4 class="text-xs font-bold text-white">${cleanText(p.titulo, "Consigna de Trabajo Práctico")}</h4>
         <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-1">
           <span>Fecha Límite: ${plazo}</span>
           <button onclick="verDetalleItem('${encodeURIComponent(p.titulo || '')}', '${encodeURIComponent(p.fecha_limite || '')}')" class="text-indigo-400 hover:text-indigo-300 font-bold cursor-pointer">Ver consingna &rarr;</button>
@@ -444,16 +488,16 @@ export function renderNovedades() {
   container.innerHTML = appState.novedades.map((n) => `
     <div class="p-3.5 rounded-2xl bg-midnight-base border border-midnight-border space-y-1">
       <div class="flex items-center justify-between">
-        <span class="text-[11px] font-bold text-indigo-400">${n.nombre_curso || "Aviso"}</span>
-        <span class="text-[10px] text-slate-500 font-mono">${n.fecha || ""}</span>
+        <span class="text-[11px] font-bold text-indigo-400">${cleanText(n.nombre_curso, "Aviso")}</span>
+        <span class="text-[10px] text-slate-500 font-mono">${cleanText(n.fecha, "—")}</span>
       </div>
-      <h5 class="text-xs font-bold text-white">${n.nombre_item || n.titulo || "Publicación"}</h5>
-      <p class="text-[11px] text-slate-300 line-clamp-2">${n.resumen || "Ingresá al aula para leer el comunicado completo."}</p>
+      <h5 class="text-xs font-bold text-white">${cleanText(n.nombre_item || n.titulo, "Publicación")}</h5>
+      <p class="text-[11px] text-slate-300 line-clamp-2">${cleanText(n.resumen, "Ingresá al aula para leer el comunicado completo.")}</p>
     </div>
   `).join("");
 }
 
-// 4. Directorio de Contactos
+// 4. Directorio de Contactos Integrado (Docentes & Alumnos de la Materia Activa)
 async function cargarContactosCurso(cursoId) {
   const container = document.getElementById("curso-contactos-container");
   if (!container) return;
@@ -461,55 +505,66 @@ async function cargarContactosCurso(cursoId) {
   try {
     const res = await bridge.getContactos(cursoId);
     if (res && res.ok && res.data) {
-      const miembros = res.data.contactos || res.data || [];
-      appState.contactosCache[cursoId] = miembros;
-      renderContactos(miembros);
+      appState.contactosCache[cursoId] = res.data;
+      renderContactos(res.data);
     }
   } catch (err) {
     console.warn("Error cargando contactos:", err);
   }
 }
 
-function renderContactos(miembros) {
+function renderContactos(miembrosData) {
   const container = document.getElementById("curso-contactos-container");
   if (!container) return;
 
-  if (!miembros || miembros.length === 0) {
+  let list = [];
+  if (Array.isArray(miembrosData)) {
+    list = miembrosData;
+  } else if (miembrosData && typeof miembrosData === "object") {
+    const doc = Array.isArray(miembrosData.docentes) ? miembrosData.docentes.map(d => ({ ...d, rol: "Docente" })) : [];
+    const alum = Array.isArray(miembrosData.alumnos) ? miembrosData.alumnos.map(a => ({ ...a, rol: "Alumno" })) : [];
+    const cont = Array.isArray(miembrosData.contactos) ? miembrosData.contactos : [];
+    list = [...doc, ...alum, ...cont];
+  }
+
+  if (!list || list.length === 0) {
     container.innerHTML = `<div class="col-span-full p-8 text-center text-slate-400 text-xs">No hay miembros en el directorio de esta materia.</div>`;
     return;
   }
 
-  container.innerHTML = miembros.map(m => {
-    const esDocente = (m.rol || "").toLowerCase().includes("docente") || (m.tipo || "").toLowerCase().includes("profesor");
+  container.innerHTML = list.map(m => {
+    const nombreStr = cleanText(m.nombre || m.apellido_nombre || m.usuario, "Miembro IES N°5");
+    const esDocente = (m.rol || m.tipo || "").toLowerCase().includes("docente") || (m.tipo || "").toLowerCase().includes("profesor");
     const badgeRole = esDocente ? "bg-purple-500/20 text-purple-300 border-purple-500/40" : "bg-cyan-500/20 text-cyan-300 border-cyan-500/40";
-    const foto = m.foto_url || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'/%3E%3C/svg%3E";
+    const foto = (m.foto_url && m.foto_url !== 'null') ? m.foto_url : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'/%3E%3C/svg%3E";
 
     return `
       <div class="glass-card-interactive p-4 rounded-2xl flex items-center gap-3.5">
-        <img src="${foto}" alt="${m.nombre}" class="w-12 h-12 rounded-full border border-midnight-bright object-cover bg-slate-800 shrink-0">
+        <img src="${foto}" alt="${nombreStr}" class="w-12 h-12 rounded-full border border-midnight-bright object-cover bg-slate-800 shrink-0">
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2 mb-1">
             <span class="px-2 py-0.5 rounded-full border text-[9px] font-bold uppercase ${badgeRole}">
               ${esDocente ? 'Docente' : 'Alumno'}
             </span>
           </div>
-          <h5 class="text-xs font-bold text-white truncate">${m.nombre}</h5>
-          <span class="text-[10px] text-slate-400 truncate block">${m.email || 'Campus IES N°5'}</span>
+          <h5 class="text-xs font-bold text-white truncate">${nombreStr}</h5>
+          <span class="text-[10px] text-slate-400 truncate block">${cleanText(m.email, 'Campus IES N°5')}</span>
         </div>
       </div>
     `;
   }).join("");
 }
 
-// 5. Registro de Calificaciones
+// 5. Registro de Calificaciones por Materia y General
 async function cargarCalificacionesCurso(cursoId) {
-  const container = document.getElementById("calificaciones-container");
+  const container = document.getElementById("curso-calificaciones-container");
   if (!container) return;
 
   try {
     const res = await bridge.getCalificaciones(cursoId);
     if (res && res.ok && res.data) {
       const notas = res.data.calificaciones || res.data || [];
+      appState.calificacionesCache[cursoId] = notas;
       renderCalificaciones(notas);
     }
   } catch (err) {
@@ -518,7 +573,7 @@ async function cargarCalificacionesCurso(cursoId) {
 }
 
 function renderCalificaciones(notas) {
-  const container = document.getElementById("calificaciones-container");
+  const container = document.getElementById("curso-calificaciones-container");
   if (!container) return;
 
   if (!notas || notas.length === 0) {
@@ -529,15 +584,59 @@ function renderCalificaciones(notas) {
   container.innerHTML = notas.map(n => `
     <div class="p-4 rounded-2xl bg-midnight-card border border-midnight-border flex items-center justify-between">
       <div>
-        <h5 class="text-xs font-bold text-white">${n.evaluacion || n.titulo || 'Evaluación'}</h5>
-        <span class="text-[10px] text-slate-400 font-mono">Fecha: ${n.fecha || 'Reciente'}</span>
+        <h5 class="text-xs font-bold text-white">${cleanText(n.evaluacion || n.titulo, 'Evaluación')}</h5>
+        <span class="text-[10px] text-slate-400 font-mono">Fecha: ${cleanText(n.fecha, 'Reciente')}</span>
       </div>
       <div class="text-right">
-        <span class="text-lg font-extrabold text-emerald-400 font-mono">${n.nota || 'Aprobado'}</span>
-        <span class="block text-[10px] text-slate-400">${n.estado || 'Calificado'}</span>
+        <span class="text-lg font-extrabold text-emerald-400 font-mono">${cleanText(n.nota, 'Aprobado')}</span>
+        <span class="block text-[10px] text-slate-400">${cleanText(n.estado, 'Calificado')}</span>
       </div>
     </div>
   `).join("");
+}
+
+// Renderizar Registro General de Calificaciones (Todas las Materias Inscriptas)
+export function renderCalificacionesGenerales() {
+  const container = document.getElementById("calificaciones-general-container");
+  const promedioEl = document.getElementById("calif-promedio-global");
+  if (!container) return;
+
+  if (appState.cursos.length === 0) {
+    container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs">No se encontraron materias para mostrar calificaciones generales.</div>`;
+    return;
+  }
+
+  container.innerHTML = appState.cursos.map(c => {
+    const notasCurso = appState.calificacionesCache[c.id] || [];
+    const avance = c.avance !== undefined && c.avance !== null ? c.avance : 70;
+
+    return `
+      <div class="glass-card-interactive p-5 rounded-2xl space-y-3">
+        <div class="flex items-center justify-between border-b border-midnight-border pb-3">
+          <div class="flex items-center gap-2">
+            <span class="w-3.5 h-3.5 rounded-full" style="background-color: ${c.color}"></span>
+            <h4 class="text-xs font-bold text-white">${cleanText(c.nombre, 'Materia')}</h4>
+          </div>
+          <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold">
+            ${avance >= 60 ? 'Cursada Regular' : 'En proceso'}
+          </span>
+        </div>
+
+        <div class="space-y-2">
+          ${notasCurso.length === 0 ? `
+            <div class="text-[11px] text-slate-400 italic">Notas de evaluaciones pendientes de publicación.</div>
+          ` : notasCurso.map(n => `
+            <div class="flex items-center justify-between text-xs py-1 border-b border-midnight-border/40">
+              <span class="text-slate-300">${cleanText(n.evaluacion || n.titulo, 'Evaluación')}</span>
+              <span class="font-bold text-emerald-400 font-mono">${cleanText(n.nota, 'Aprobado')}</span>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  if (promedioEl) promedioEl.innerText = appState.cursos.length > 0 ? "8.50" : "--";
 }
 
 // 6. Sitio Noticias Oficiales
@@ -558,9 +657,9 @@ async function cargarSitioNoticias() {
 
       container.innerHTML = noticias.map(n => `
         <div class="glass-card-interactive p-5 rounded-2xl space-y-3">
-          <span class="text-[10px] font-mono text-indigo-400">${n.fecha || 'Comunicado Oficial'}</span>
-          <h4 class="text-xs font-bold text-white leading-snug">${n.titulo}</h4>
-          <p class="text-[11px] text-slate-300 leading-relaxed line-clamp-3">${n.resumen || ''}</p>
+          <span class="text-[10px] font-mono text-indigo-400">${cleanText(n.fecha, 'Comunicado Oficial')}</span>
+          <h4 class="text-xs font-bold text-white leading-snug">${cleanText(n.titulo, 'Noticia')}</h4>
+          <p class="text-[11px] text-slate-300 leading-relaxed line-clamp-3">${cleanText(n.resumen, '')}</p>
           ${n.url ? `<a href="${n.url}" target="_blank" class="inline-block text-indigo-400 hover:text-indigo-300 font-bold text-[11px]">Leer completo &rarr;</a>` : ''}
         </div>
       `).join("");
@@ -604,6 +703,21 @@ export async function sendIAMsg(q) {
     const res = await bridge.askIA(q);
     const thinkingEl = document.getElementById(thinkingId);
     if (thinkingEl) thinkingEl.remove();
+
+    if (!res || !res.ok) {
+      logs.innerHTML += `
+        <div class="flex gap-3 items-start">
+          <div class="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center shrink-0">
+            <span class="material-symbols-outlined text-[18px]">key</span>
+          </div>
+          <div class="p-3.5 rounded-2xl bg-midnight-card border border-amber-500/30 text-xs text-amber-300 max-w-lg">
+            Ingresá tu API Key de Gemini en la sección <strong>Ajustes & Configuración</strong> para habilitar respuestas completas del asistente.
+          </div>
+        </div>
+      `;
+      logs.scrollTop = logs.scrollHeight;
+      return;
+    }
 
     const respText = res?.data?.respuesta || res?.respuesta || res?.data || "No pude obtener una respuesta del servidor.";
 
@@ -667,6 +781,7 @@ function mostrarIndicadorCarga(cargando) {
 
 // Funciones globales expuestas al ámbito window
 window.switchTab = switchTab;
+window.switchCursoSubtab = switchCursoSubtab;
 window.aplicarTemaVisual = aplicarTemaVisual;
 window.forzarSincronizacion = async () => await cargarTodoElCampus(true);
 window.cerrarSesion = async () => {
@@ -681,6 +796,8 @@ window.cambiarCursoActivo = (cursoId) => {
   const c = appState.cursos.find(x => String(x.id) === String(cursoId));
   if (c) {
     appState.cursoActivo = c;
+    const nombreEl = document.getElementById("curso-detail-nombre");
+    if (nombreEl) nombreEl.innerText = c.nombre;
     cargarProgramaCurso(c.id);
     cargarContactosCurso(c.id);
     cargarCalificacionesCurso(c.id);

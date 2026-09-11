@@ -574,6 +574,9 @@ def cargar_gemini_key() -> str | None:
                     return val
             except Exception:
                 pass
+        env_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_KEY")
+        if env_key:
+            return env_key.strip()
         return None
     try:
         with open(GEMINI_KEY_FILE, "rb") as f:
