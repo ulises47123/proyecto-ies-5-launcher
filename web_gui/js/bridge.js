@@ -29,7 +29,7 @@ class PyloidBridge {
     if (!this._ready || !this._ipc) {
       await this.init();
     }
-    return new Promise((resolve) => {
+    const resLaunch = await new Promise((resolve) => {
       try {
         this._ipc[method](...args, (res) => {
           try {
@@ -43,6 +43,25 @@ class PyloidBridge {
         resolve({ ok: false, error: err.toString() });
       }
     });
+
+    if (resLaunch && resLaunch.job_id) {
+      const jobId = resLaunch.job_id;
+      while (true) {
+        await new Promise((r) => setTimeout(r, 100));
+        const pollRes = await new Promise((resolve) => {
+          try {
+            this._ipc.poll_job(jobId, (r) => {
+              try { resolve(typeof r === "string" ? JSON.parse(r) : r); }
+              catch (e) { resolve(r); }
+            });
+          } catch (err) { resolve({ done: true, result: { ok: false, error: err.toString() } }); }
+        });
+        if (pollRes && pollRes.done) {
+          return pollRes.result;
+        }
+      }
+    }
+    return resLaunch;
   }
 
   // ── Métodos de Autenticación ──

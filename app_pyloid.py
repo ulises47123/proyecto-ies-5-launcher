@@ -22,11 +22,14 @@ from services import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+
 class CampusAPI(PyloidIPC):
     """
     Adaptador IPC para Pyloid.
     Responsabilidad única: Exponer funciones a JavaScript mediante JSON
-    y delegar la ejecución a los servicios de dominio correspondientes.
+    y delegar la ejecución asíncrona a los servicios de dominio correspondientes sin bloquear Qt.
     """
 
     def __init__(self):
@@ -41,6 +44,8 @@ class CampusAPI(PyloidIPC):
         self._calificaciones = None
         self._sitio = None
         self._ia = None
+        self._pool = ThreadPoolExecutor(max_workers=4)
+        self._jobs = {}
 
     def _init_servicios(self):
         """Inicializa los servicios de dominio de forma lazy (primera llamada)."""
@@ -77,6 +82,24 @@ class CampusAPI(PyloidIPC):
     def ia(self):
         self._init_servicios(); return self._ia
 
+    def _submit_job(self, func, *args, **kwargs) -> str:
+        job_id = str(uuid.uuid4())
+        self._jobs[job_id] = {"done": False, "result": None}
+
+        def _worker():
+            try:
+                res = func(*args, **kwargs)
+                self._jobs[job_id] = {"done": True, "result": res}
+            except Exception as e:
+                self._jobs[job_id] = {"done": True, "result": {"ok": False, "error": str(e)}}
+
+        self._pool.submit(_worker)
+        return json.dumps({"ok": True, "job_id": job_id})
+
+    @Bridge(str, result=str)
+    def poll_job(self, job_id: str) -> str:
+        return json.dumps(self._jobs.get(job_id, {"done": True, "result": None}))
+
     # ── Autenticación y Sesión ──
     @Bridge(result=str)
     def check_auth(self) -> str:
@@ -84,12 +107,11 @@ class CampusAPI(PyloidIPC):
 
     @Bridge(result=str)
     def restore_session(self) -> str:
-        return json.dumps(self.auth.restaurar_sesion_guardada())
+        return self._submit_job(self.auth.restaurar_sesion_guardada)
 
     @Bridge(str, str, bool, bool, result=str)
     def login(self, usuario: str, clave: str, recordar: bool, autologin: bool) -> str:
-        res = self.auth.login_con_credenciales(usuario, clave, recordar, autologin)
-        return json.dumps(res)
+        return self._submit_job(self.auth.login_con_credenciales, usuario, clave, recordar, autologin)
 
     @Bridge(result=str)
     def logout(self) -> str:
@@ -97,110 +119,85 @@ class CampusAPI(PyloidIPC):
 
     @Bridge(result=str)
     def get_profile(self) -> str:
-        return json.dumps(self.auth.get_user_profile())
+        return self._submit_job(self.auth.get_user_profile)
 
     # ── Cursos y Escritorio ──
     @Bridge(bool, result=str)
     def get_cursos(self, forzar: bool = False) -> str:
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            future = executor.submit(self.cursos.get_cursos_y_novedades, forzar_recarga=forzar)
-            return json.dumps(future.result())
+        return self._submit_job(self.cursos.get_cursos_y_novedades, forzar_recarga=forzar)
 
     # ── Contactos y Miembros ──
     @Bridge(str, bool, result=str)
     def get_contactos(self, curso_id: str, forzar: bool = False) -> str:
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            future = executor.submit(self.contactos.get_contactos_curso, curso_id, forzar_recarga=forzar)
-            return json.dumps(future.result())
+        return self._submit_job(self.contactos.get_contactos_curso, curso_id, forzar_recarga=forzar)
 
     @Bridge(str, str, result=str)
     def get_perfil(self, curso_id: str, usuario_id: str) -> str:
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            future = executor.submit(self.contactos.get_perfil_usuario, curso_id, usuario_id)
-            return json.dumps(future.result())
+        return self._submit_job(self.contactos.get_perfil_usuario, curso_id, usuario_id)
 
     # ── Actividades y Clases ──
     @Bridge(str, result=str)
     def get_programa(self, curso_id: str) -> str:
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            future = executor.submit(self.actividades.get_programa_materia, curso_id)
-            return json.dumps(future.result())
+        return self._submit_job(self.actividades.get_programa_materia, curso_id)
 
     @Bridge(str, result=str)
     def get_actividad_detalle(self, url: str) -> str:
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            future = executor.submit(self.actividades.get_detalle_actividad, url)
-            return json.dumps(future.result())
+        return self._submit_job(self.actividades.get_detalle_actividad, url)
 
     @Bridge(result=str)
     def get_pendientes(self) -> str:
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            future = executor.submit(self.actividades.get_registro_pendientes)
-            return json.dumps(future.result())
+        return self._submit_job(self.actividades.get_registro_pendientes)
 
     # ── Calificaciones ──
     @Bridge(str, result=str)
     def get_calificaciones(self, curso_id: str) -> str:
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            future = executor.submit(self.calificaciones.get_calificaciones_curso, curso_id)
-            return json.dumps(future.result())
+        return self._submit_job(self.calificaciones.get_calificaciones_curso, curso_id)
 
     # ── Mensajería / Webmail ──
     @Bridge(str, str, result=str)
     def get_mensajes(self, curso_id: str, bandeja: str = "Inbox") -> str:
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            future = executor.submit(self.mensajes.get_mensajes_bandeja, curso_id, bandeja=bandeja)
-            return json.dumps(future.result())
+        return self._submit_job(self.mensajes.get_mensajes_bandeja, curso_id, bandeja=bandeja)
 
     # ── Sitio Institucional ──
     @Bridge(bool, result=str)
     def get_sitio_noticias(self, forzar: bool = False) -> str:
-        return json.dumps(self.sitio.get_noticias_y_recursos(forzar_recarga=forzar))
+        return self._submit_job(self.sitio.get_noticias_y_recursos, forzar_recarga=forzar)
 
     # ── Inteligencia Artificial ──
     @Bridge(str, result=str)
     def ask_ia(self, pregunta: str) -> str:
-        return json.dumps(self.ia.consultar(pregunta))
+        return self._submit_job(self.ia.consultar, pregunta)
 
-
-    # ── Mensajería Avanzada (Detalle, Enviar, Responder, Reenviar, Eliminar, Vaciar) ──
+    # ── Mensajería Avanzada ──
     @Bridge(str, str, result=str)
     def get_mensaje_detalle(self, link_o_id: str, id_curso: str = "") -> str:
-        return json.dumps(self.mensajes.get_detalle_mensaje(link_o_id, id_curso=id_curso))
+        return self._submit_job(self.mensajes.get_detalle_mensaje, link_o_id, id_curso=id_curso)
 
     @Bridge(str, str, str, str, str, result=str)
     def enviar_mensaje(self, id_curso: str, destinatarios: str, asunto: str, cuerpo: str, archivo_adjunto: str = "") -> str:
         adj = archivo_adjunto if archivo_adjunto.strip() else None
-        return json.dumps(self.mensajes.enviar_mensaje(id_curso, destinatarios, asunto, cuerpo, adj))
+        return self._submit_job(self.mensajes.enviar_mensaje, id_curso, destinatarios, asunto, cuerpo, adj)
 
     @Bridge(str, str, str, str, str, result=str)
     def responder_mensaje(self, id_curso: str, id_email: str, destinatario_id: str, asunto: str, cuerpo: str) -> str:
-        return json.dumps(self.mensajes.responder(id_curso, id_email, destinatario_id, asunto, cuerpo))
+        return self._submit_job(self.mensajes.responder, id_curso, id_email, destinatario_id, asunto, cuerpo)
 
     @Bridge(str, str, str, str, str, result=str)
     def reenviar_mensaje(self, id_curso: str, id_email: str, destinatario_id: str, asunto: str, nota: str = "") -> str:
-        return json.dumps(self.mensajes.reenviar(id_curso, id_email, destinatario_id, asunto, nota))
+        return self._submit_job(self.mensajes.reenviar, id_curso, id_email, destinatario_id, asunto, nota)
 
     @Bridge(str, str, result=str)
     def eliminar_mensaje(self, id_curso: str, id_email: str) -> str:
-        return json.dumps(self.mensajes.eliminar(id_curso, id_email))
+        return self._submit_job(self.mensajes.eliminar, id_curso, id_email)
 
     @Bridge(str, result=str)
     def vaciar_papelera(self, id_curso: str) -> str:
-        return json.dumps(self.mensajes.vaciar_papelera(id_curso))
+        return self._submit_job(self.mensajes.vaciar_papelera, id_curso)
 
     # ── Búsqueda en Sitio Institucional ──
     @Bridge(str, int, result=str)
     def buscar_sitio(self, query: str, max_res: int = 10) -> str:
-        return json.dumps(self.sitio.buscar(query, max_resultados=max_res))
+        return self._submit_job(self.sitio.buscar, query, max_resultados=max_res)
 
 
 def main():
