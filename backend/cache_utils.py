@@ -91,7 +91,7 @@ def get_mensajes_chat(sess, id_curso: str) -> dict:
 
         docs = r_msgs.json().get("documents", [])
         mensajes = []
-        user_id_actual = str(getattr(sess, "usuario", "47123607"))
+        user_id_actual = str(getattr(sess, "usuario", "usuario_anonimo"))
 
         for d in docs:
             fields = d.get("fields", {})
@@ -171,7 +171,7 @@ def enviar_mensaje_chat(sess, id_curso: str, mensaje: str) -> tuple[bool, str]:
         cfg = json.loads(cfg_m[0])
         api_key = cfg.get("apiKey", "")
         display_name = nom_m[0] if nom_m else (getattr(sess, "nombre", "") or getattr(sess, "usuario", "Estudiante"))
-        user_id = str(getattr(sess, "usuario", "47123607"))
+        user_id = str(getattr(sess, "usuario", "usuario_anonimo"))
 
         # Auth
         auth_url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key={api_key}"
