@@ -193,3 +193,20 @@ input:focus, select:focus, textarea:focus {
 .bg-midnight-hover { background-color: var(--bg-card-hover) !important; }
 .border-midnight-border { border-color: var(--border-color) !important; }
 .border-midnight-bright { border-color: var(--border-bright) !important; }
+
+/* ── Anti-Flicker & Material Symbols Space Reservation ── */
+.material-symbols-outlined {
+  font-display: block;
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 1;
+  width: 1em;
+  height: 1em;
+  overflow: hidden;
+  contain: layout style;
+}
+
+main, section, aside {
+  contain: layout style;
+}
+
