@@ -74,6 +74,7 @@ class PyloidBridge {
   async getProfile() { return this._call("get_profile"); }
 
   // ── Materias / Cursos ──
+  async resolveImage(url, nombre = "", metodo = 1) { return this._call("resolve_image", String(url), String(nombre), Number(metodo)); }
   async getCursos(force = false) { return this._call("get_cursos", Boolean(force)); }
   async getContactos(cursoId, force = false) { return this._call("get_contactos", String(cursoId), Boolean(force)); }
   async getPerfil(cursoId, usuarioId) { return this._call("get_perfil", String(cursoId), String(usuarioId)); }

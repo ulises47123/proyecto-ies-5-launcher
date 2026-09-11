@@ -23,6 +23,7 @@ from services import (
     ActividadesService, MensajesService, CalificacionesService,
     SitioService, IAService
 )
+from services.image_service import ImageService
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -66,6 +67,7 @@ class CampusAPI(PyloidIPC):
             self._calificaciones = CalificacionesService(sess)
             self._sitio = SitioService()
             self._ia = IAService(sess)
+            self._imagenes = ImageService(sess)
 
     @property
     def cursos(self):
@@ -88,6 +90,9 @@ class CampusAPI(PyloidIPC):
     @property
     def ia(self):
         self._init_servicios(); return self._ia
+    @property
+    def imagenes(self):
+        self._init_servicios(); return self._imagenes
 
     def _submit_job(self, func, *args, **kwargs) -> str:
         job_id = str(uuid.uuid4())
@@ -138,6 +143,10 @@ class CampusAPI(PyloidIPC):
         return self._submit_job(self.auth.get_user_profile)
 
     # ── Cursos y Escritorio ──
+    @Bridge(str, str, int, result=str)
+    def resolve_image(self, url: str, nombre: str = "", metodo: int = 1) -> str:
+        return self._submit_job(self.imagenes.resolver_imagen, url, nombre, metodo)
+
     @Bridge(bool, result=str)
     def get_cursos(self, forzar: bool = False) -> str:
         return self._submit_job(self.cursos.get_cursos_y_novedades, forzar_recarga=forzar)

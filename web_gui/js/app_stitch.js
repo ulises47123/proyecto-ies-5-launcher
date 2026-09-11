@@ -279,6 +279,29 @@ export async function cargarTodoElCampus(forzar = false) {
   }
 }
 
+async function cargarImagenAutenticada(url, nombre, imgElementsArray) {
+  // Intentaremos los 4 métodos secuencialmente.
+  // 1: Base64 en línea, 2: Archivo Local Caché, 3: Inyección de Cookies, 4: SVG Iniciales Dinámico
+  for (let metodo = 1; metodo <= 4; metodo++) {
+    try {
+      const res = await bridge.resolveImage(url, nombre, metodo);
+      if (res && res.ok && res.data) {
+        if (typeof res.data === 'string') {
+          imgElementsArray.forEach(img => { if(img) img.src = res.data; });
+          return; // Éxito con M1, M2 o M4
+        } else if (res.data.type === 'cookie_inject') {
+          // Método 3: setear cookies y usar src nativo
+          document.cookie = res.data.cookie_string;
+          imgElementsArray.forEach(img => { if(img) img.src = url; });
+          return;
+        }
+      }
+    } catch(err) {
+      console.warn(`[ImageService] Falló método ${metodo} para la imagen. Probando el siguiente...`);
+    }
+  }
+}
+
 function actualizarPerfilUI(u) {
   if (!u) return;
 
@@ -301,10 +324,8 @@ function actualizarPerfilUI(u) {
 
   if (topUserSec) topUserSec.classList.remove("hidden");
 
-  if (u.foto_url && u.foto_url !== 'null') {
-    if (topAvatar) topAvatar.src = u.foto_url;
-    if (sideAvatar) sideAvatar.src = u.foto_url;
-  }
+  // Iniciar la carga de la imagen con los 4 métodos de contingencia
+  cargarImagenAutenticada(u.foto_url, nombreCompleto, [topAvatar, sideAvatar]);
 }
 
 function poblarSelectorCursos() {
@@ -686,15 +707,21 @@ function renderContactos(miembrosData) {
     return;
   }
 
-  container.innerHTML = list.map(m => {
+  container.innerHTML = list.map((m, idx) => {
     const nombreStr = cleanText(m.nombre || m.apellido_nombre || m.usuario, "Miembro IES N°5");
     const esDocente = (m.rol || m.tipo || "").toLowerCase().includes("docente") || (m.tipo || "").toLowerCase().includes("profesor");
     const badgeRole = esDocente ? "bg-purple-500/20 text-purple-300 border-purple-500/40" : "bg-cyan-500/20 text-cyan-300 border-cyan-500/40";
-    const foto = (m.foto_url && m.foto_url !== 'null') ? m.foto_url : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'/%3E%3C/svg%3E";
+    const imgId = `avatar-contacto-${idx}-${Date.now()}`;
+
+    // Despachar la carga dinámica en background
+    setTimeout(() => {
+      const imgEl = document.getElementById(imgId);
+      if (imgEl) cargarImagenAutenticada(m.foto_url, nombreStr, [imgEl]);
+    }, 10);
 
     return `
       <div class="glass-card-interactive p-4 rounded-2xl flex items-center gap-3.5">
-        <img src="${foto}" alt="${nombreStr}" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'%2394a3b8\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z\'/%3E%3C/svg%3E';" class="w-12 h-12 rounded-full border border-midnight-bright object-cover bg-slate-800 shrink-0">
+        <img id="${imgId}" alt="${nombreStr}" class="w-12 h-12 rounded-full border border-midnight-bright object-cover bg-slate-800 shrink-0">
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2 mb-1">
             <span class="px-2 py-0.5 rounded-full border text-[9px] font-bold uppercase ${badgeRole}">
