@@ -96,7 +96,7 @@ function setupEventListeners() {
           errBox.innerText = "Error de conexión con el servidor: " + error.toString();
           errBox.classList.remove("hidden");
         }
-      } font: {
+      } finally {
         if (btnSubmit) {
           btnSubmit.disabled = false;
           btnSubmit.innerHTML = `<span>Ingresar al Campus</span><span class="material-symbols-outlined text-[18px]">arrow_forward</span>`;
