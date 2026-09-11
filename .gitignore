@@ -19,7 +19,13 @@ instrucciones.txt
 # Archivos de depuración y pruebas
 debug_*.html
 pruebas/
+docs/debug/
 *.tmp
+*.spec.bak
+
+# Datos locales y persistencia
+data/
+
 
 # Claves y configuraciones locales/credenciales
 .env
@@ -34,3 +40,9 @@ id_ed25519*
 .vscode/
 .idea/
 *.swp
+
+# Temporales de diagnóstico local
+crash_*.txt
+error_log.txt
+*.zip
+*.vbs

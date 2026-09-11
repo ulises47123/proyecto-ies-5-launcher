@@ -1771,14 +1771,14 @@ class CursoDetailView(ctk.CTkFrame):
             badge.pack(side="right", padx=10)
 
     # ── CONTACTOS ─────────────────────────────────────────────
-    def _load_contactos(self):
+    def _load_contactos(self, forzar_recarga: bool = False):
         clear_frame(self.page_contactos)
         lbl_cargando = make_label(self.page_contactos, "⏳ Extrayendo datos de docentes, compañeros y perfiles...", tipo="subtitulo")
         lbl_cargando.pack(pady=20)
 
         def run():
             try:
-                data = cont_mod.get_contactos(self.sess, self.curso["id"], obtener_detalles_completos=True)
+                data = cont_mod.get_contactos(self.sess, self.curso["id"], obtener_detalles_completos=True, forzar_recarga=forzar_recarga)
                 if getattr(self, "_destroyed", False):
                     return
                 self.after(0, self._show_contactos, data)
@@ -1799,7 +1799,7 @@ class CursoDetailView(ctk.CTkFrame):
         docentes = data.get("docentes", [])
         alumnos = data.get("alumnos", [])
 
-        # Barra superior con botón de Exportar CSV
+        # Barra superior con botones de Acción
         top_bar = ctk.CTkFrame(self.page_contactos, fg_color="transparent")
         top_bar.pack(fill="x", padx=4, pady=(0, 10))
 
@@ -1813,6 +1813,13 @@ class CursoDetailView(ctk.CTkFrame):
             tipo="primary", width=140, height=30
         )
         btn_csv.pack(side="right")
+
+        btn_recargar = make_btn(
+            top_bar, "🔄 Actualizar",
+            command=lambda: self._load_contactos(forzar_recarga=True),
+            tipo="flat", width=110, height=30
+        )
+        btn_recargar.pack(side="right", padx=(0, 8))
 
         # Scroll de contactos
         scroll_c = ctk.CTkScrollableFrame(self.page_contactos, fg_color="transparent")
@@ -1890,11 +1897,11 @@ class CursoDetailView(ctk.CTkFrame):
         card.pack(fill="x", pady=2, padx=2)
 
         inner = ctk.CTkFrame(card, fg_color="transparent")
-        inner.pack(fill="x", padx=10, pady=6)
+        inner.pack(fill="x", padx=10, pady=8)
 
-        # Avatar o Ícono circular compacto
-        avatar_box = ctk.CTkFrame(inner, width=34, height=34, fg_color=t["card"], corner_radius=17)
-        avatar_box.pack(side="left", padx=(0, 10))
+        # Avatar o Ícono circular
+        avatar_box = ctk.CTkFrame(inner, width=40, height=40, fg_color=t["card"], corner_radius=20)
+        avatar_box.pack(side="left", padx=(0, 12))
         avatar_box.pack_propagate(False)
 
         lbl_av = make_label(avatar_box, icon, tipo="blanco", anchor="center")
@@ -1902,21 +1909,37 @@ class CursoDetailView(ctk.CTkFrame):
 
         foto_url = p.get("foto_url")
         if foto_url:
-            self._cargar_avatar_async(lbl_av, foto_url, size=(34, 34), fallback_text=icon)
+            self._cargar_avatar_async(lbl_av, foto_url, size=(40, 40), fallback_text=icon)
 
-        # Izquierda: Nombre y detalles
+        # Centro / Izquierda: Información de la persona
         left = ctk.CTkFrame(inner, fg_color="transparent")
         left.pack(side="left", fill="x", expand=True)
 
-        nombre = p.get("nombre", "—")
-        lbl_nom = make_label(left, nombre, tipo="blanco", wrap=380)
-        lbl_nom.pack(anchor="w")
+        # Fila 1: Nombre con rol/badge al lado
+        top_name_row = ctk.CTkFrame(left, fg_color="transparent")
+        top_name_row.pack(fill="x", anchor="w")
 
+        nombre = p.get("nombre", "—")
+        lbl_nom = make_label(top_name_row, nombre, tipo="blanco", wrap=420)
+        lbl_nom.pack(side="left", anchor="w")
+
+        rol_text = "Docente" if es_docente else "Compañero"
+        badge_bg = t.get("accent", "#2563eb") if es_docente else t.get("card", "#1b2a47")
+        badge_fg = "#ffffff" if es_docente else t.get("muted", "#94a3b8")
+        badge_rol = make_badge(top_name_row, rol_text, bg_color=badge_bg, text_color=badge_fg)
+        badge_rol.pack(side="left", padx=(8, 0))
+
+        # Fila 2: Datos de contacto (Email, Teléfono, Ubicación)
         info_row = ctk.CTkFrame(left, fg_color="transparent")
-        info_row.pack(anchor="w", pady=(1, 0))
+        info_row.pack(fill="x", anchor="w", pady=(3, 0))
 
         email = p.get("email")
+        tel = p.get("telefono")
+        lugar = p.get("lugar")
+
+        tiene_datos = False
         if email and email != "No especificado":
+            tiene_datos = True
             lbl_em = make_label(info_row, f"✉ {email}", tipo="subtitulo")
             lbl_em.pack(side="left", padx=(0, 6))
 
@@ -1927,21 +1950,25 @@ class CursoDetailView(ctk.CTkFrame):
             )
             btn_copy.pack(side="left", padx=(0, 8))
 
-        tel = p.get("telefono")
         if tel and tel != "No especificado":
+            tiene_datos = True
             lbl_tel = make_label(info_row, f"📞 {tel}", tipo="subtitulo")
             lbl_tel.pack(side="left", padx=(0, 8))
 
-        lugar = p.get("lugar")
         if lugar and lugar != "No especificado":
+            tiene_datos = True
             lbl_lug = make_label(info_row, f"📍 {lugar}", tipo="subtitulo")
-            lbl_lug.pack(side="left")
+            lbl_lug.pack(side="left", padx=(0, 8))
+
+        if not tiene_datos:
+            lbl_nodata = make_label(info_row, "🔒 Perfil privado / Datos disponibles en ficha", tipo="subtitulo")
+            lbl_nodata.pack(side="left")
 
         # Derecha: Botón Ver Ficha Completa
         btn_ver = make_btn(
             inner, "Ver Ficha",
             command=lambda pers=p: self._abrir_popup_perfil(pers),
-            tipo="flat", width=75, height=26
+            tipo="flat", width=80, height=28
         )
         btn_ver.pack(side="right", padx=(6, 0))
 

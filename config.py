@@ -411,26 +411,6 @@ def cargar_creds() -> tuple[str, str]:
         except Exception:
             pass
 
-    # 2. Fallback: credenciales.txt en el directorio de la app
-    local_creds = os.path.join(os.path.dirname(__file__), "credenciales.txt")
-    if os.path.exists(local_creds):
-        try:
-            with open(local_creds, "r", encoding="utf-8", errors="ignore") as f:
-                text = f.read()
-                lines = text.splitlines()
-                u, p = "", ""
-                for l in lines:
-                    if "usuario:" in l.lower():
-                        u = l.split(":", 1)[1].strip()
-                    elif any(k in l.lower() for k in ["contrasena:", "contraseña:", "contrcania:", "clave:"]):
-                        p = l.split(":", 1)[1].strip()
-                if u and p:
-                    return u, p
-                if len(lines) >= 2:
-                    return lines[0].strip(), lines[1].strip()
-        except Exception:
-            pass
-
     return "", ""
 
 

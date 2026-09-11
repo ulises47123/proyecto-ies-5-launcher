@@ -171,15 +171,17 @@ def _parse_contactos(sess: CampusSession, html: str, id_curso: str, obtener_deta
                     foto = item.get("foto") or ""
                     
                     if nombre:
-                        lista_target.append({
-                            "id": uid,
-                            "nombre": nombre,
-                            "rol": rol_nombre,
-                            "email": "No especificado",
-                            "telefono": telefono or "No especificado",
-                            "lugar": "No especificado",
-                            "foto_url": foto
-                        })
+                        nombre_limpio = limpiar_html(str(nombre)).strip()
+                        if nombre_limpio and nombre_limpio.lower() not in ('apellido', 'nombre', 'check all'):
+                            lista_target.append({
+                                "id": uid,
+                                "nombre": nombre_limpio,
+                                "rol": rol_nombre,
+                                "email": "No especificado",
+                                "telefono": str(telefono).strip() if telefono else "No especificado",
+                                "lugar": "No especificado",
+                                "foto_url": foto
+                            })
             except Exception:
                 pass
 
