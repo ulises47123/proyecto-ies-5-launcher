@@ -74,12 +74,16 @@ def get_current_user(sess: CampusSession = None, cache_dir: str = CONFIG_DIR, fo
                 if m_topbar:
                     nombre = re.sub(r'<[^>]+>', '', m_topbar.group(1)).strip()
 
-            # Extraer foto de perfil
-            m_foto = re.search(r'url_thumb:\s*["\']([^"\']+)["\']', html)
-            if not m_foto:
-                m_foto = re.search(r'class=["\'][^"\']*topbar-user-avatar[^"\']*["\'][^>]*src=["\']([^"\']+)["\']', html, re.IGNORECASE)
-            if m_foto:
-                foto_url = m_foto.group(1).strip()
+            # Extraer foto de perfil del usuario autenticado
+            soup_top = BeautifulSoup(html, 'html.parser')
+            img_top = (
+                soup_top.find('img', class_=re.compile(r'topbar-user-avatar|perfil_imagen|avatar', re.I)) or
+                soup_top.find('img', src=re.compile(r'archivos/usuarios|thumb_', re.I))
+            )
+            if img_top and img_top.get('src'):
+                foto_url = img_top.get('src', '').strip()
+                if foto_url and not foto_url.startswith("http"):
+                    foto_url = f"{BASE_URL}{foto_url.lstrip('/')}"
 
             # Fallback secundario a estadisticas.cgi si aún falta el nombre
             if not nombre or nombre == dni:

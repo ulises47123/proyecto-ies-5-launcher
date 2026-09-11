@@ -694,11 +694,13 @@ async function cargarSubtabContactos(cursoId) {
       const iniciales = (p.nombre || "Usuario").split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
       const badgeClass = p.esDocente ? "text-blue-400 bg-blue-500/10 border-blue-500/20" : "text-slate-400 bg-slate-800 border-slate-700";
       const fotoUrl = p.foto_url || p.avatar || "";
+      const esDefault = fotoUrl.includes("comunes/thumb") || fotoUrl.includes("default") || fotoUrl.includes("spacer") || fotoUrl.includes("blank");
+      const tieneFotoReal = fotoUrl && fotoUrl.length > 10 && !esDefault;
 
       return `
         <div onclick="window.appBridgeUI.verContactoFicha('${p.id || pIdx}', '${cursoId}')" class="p-3 bg-midnight-base/80 border border-midnight-border rounded-xl flex items-center gap-3 hover:border-blue-500/40 cursor-pointer transition-all">
           <div class="w-10 h-10 rounded-full ${p.esDocente ? 'bg-blue-600/30 border-blue-400/40 text-blue-300' : 'bg-slate-700/40 border-slate-600 text-slate-300'} border flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
-            ${fotoUrl && fotoUrl.length > 5 ? `<img src="${fotoUrl}" alt="${p.nombre}" class="w-full h-full object-cover" onerror="this.classList.add('hidden'); if(this.nextElementSibling) this.nextElementSibling.classList.remove('hidden');"/><span class="hidden">${iniciales}</span>` : `<span>${iniciales}</span>`}
+            ${tieneFotoReal ? `<img src="${fotoUrl}" alt="${p.nombre}" class="w-full h-full object-cover" onerror="this.classList.add('hidden'); if(this.nextElementSibling) this.nextElementSibling.classList.remove('hidden');"/><span class="hidden">${iniciales}</span>` : `<span>${iniciales}</span>`}
           </div>
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">

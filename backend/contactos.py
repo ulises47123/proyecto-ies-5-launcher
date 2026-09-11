@@ -166,7 +166,7 @@ def _parse_contactos(sess: CampusSession, html: str, id_curso: str, obtener_deta
 
     # Método 1: Extraer del objeto JS nativo de Educativa
     for tipo, lista_target, rol_nombre in [('P', docentes, 'Docente'), ('A', alumnos, 'Alumno')]:
-        m = re.search(rf'Educativa\.Aula\.Contactos\.data\.{tipo}\.items\s*=\s*(\[\{{.*?\}}]);', html, re.DOTALL)
+        m = re.search(rf'Educativa\.Aula\.Contactos\.data\.{tipo}\.items\s*=\s*(\[.*?\]);', html, re.DOTALL)
         if m:
             try:
                 items = json.loads(m.group(1))
