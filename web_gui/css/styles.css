@@ -1,17 +1,95 @@
-/* Discord Aesthetic Styles */
+/* ==========================================================================
+   Campus Virtual IES N°5 — Ultra-Modern Dynamic Theme & Styling System
+   ========================================================================== */
+
+/* ── Theme Definitions via CSS Variables ── */
+:root, [data-theme="midnight"] {
+  --bg-base: #070a12;
+  --bg-sidebar: #0d1222;
+  --bg-card: rgba(15, 23, 42, 0.75);
+  --bg-card-hover: rgba(26, 38, 66, 0.85);
+  --bg-input: rgba(15, 23, 42, 0.9);
+  --border-color: rgba(99, 102, 241, 0.18);
+  --border-bright: rgba(129, 140, 248, 0.4);
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+  --primary-glow: rgba(99, 102, 241, 0.35);
+  --accent: #06b6d4;
+  --accent-glow: rgba(6, 182, 212, 0.35);
+  --gradient-main: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+  --gradient-card: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(139, 92, 246, 0.05) 100%);
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  --status-online: #10b981;
+}
+
+[data-theme="dark"] {
+  --bg-base: #090d16;
+  --bg-sidebar: #0f172a;
+  --bg-card: rgba(17, 24, 39, 0.8);
+  --bg-card-hover: rgba(30, 41, 59, 0.9);
+  --bg-input: rgba(17, 24, 39, 0.95);
+  --border-color: rgba(56, 189, 248, 0.18);
+  --border-bright: rgba(56, 189, 248, 0.45);
+  --primary: #38bdf8;
+  --primary-hover: #0284c7;
+  --primary-glow: rgba(56, 189, 248, 0.35);
+  --accent: #818cf8;
+  --accent-glow: rgba(129, 140, 248, 0.35);
+  --gradient-main: linear-gradient(135deg, #0284c7 0%, #38bdf8 50%, #818cf8 100%);
+  --gradient-card: linear-gradient(135deg, rgba(56, 189, 248, 0.12) 0%, rgba(129, 140, 248, 0.05) 100%);
+  --text-main: #ffffff;
+  --text-muted: #9ca3af;
+  --text-dim: #6b7280;
+  --status-online: #34d399;
+}
+
+[data-theme="emerald"] {
+  --bg-base: #03120f;
+  --bg-sidebar: #071f1a;
+  --bg-card: rgba(6, 32, 28, 0.8);
+  --bg-card-hover: rgba(13, 53, 46, 0.9);
+  --bg-input: rgba(6, 32, 28, 0.95);
+  --border-color: rgba(16, 185, 129, 0.2);
+  --border-bright: rgba(52, 211, 153, 0.45);
+  --primary: #10b981;
+  --primary-hover: #059669;
+  --primary-glow: rgba(16, 185, 129, 0.35);
+  --accent: #34d399;
+  --accent-glow: rgba(52, 211, 153, 0.35);
+  --gradient-main: linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%);
+  --gradient-card: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(52, 211, 153, 0.05) 100%);
+  --text-main: #f0fdf4;
+  --text-muted: #86efac;
+  --text-dim: #4ade80;
+  --status-online: #10b981;
+}
+
+/* ── Base Reset & Font Styling ── */
+body {
+  background-color: var(--bg-base);
+  color: var(--text-main);
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+  user-select: none;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ── Custom Webkit Scrollbars ── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.1);
 }
 ::-webkit-scrollbar-thumb {
-  background: #1a1b1e;
-  border-radius: 4px;
+  background: var(--border-color);
+  border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #111214;
+  background: var(--primary);
 }
 
 .no-scrollbar::-webkit-scrollbar {
@@ -22,13 +100,70 @@
   scrollbar-width: none;
 }
 
-/* Tooltip animation */
+/* ── Glassmorphism & Card Utilities ── */
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.glass-panel:hover {
+  border-color: var(--border-bright);
+}
+
+.glass-card-interactive {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glass-card-interactive:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-bright);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -6px var(--primary-glow);
+}
+
+/* ── Gradient Text & Animations ── */
+.text-gradient {
+  background: var(--gradient-main);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 15px var(--primary-glow);
+  }
+  50% {
+    box-shadow: 0 0 25px var(--accent-glow);
+  }
+}
+
+.glow-active {
+  animation: pulseGlow 3s infinite ease-in-out;
+}
+
+/* ── Tooltip Animations ── */
 .tooltip {
   visibility: hidden;
   opacity: 0;
-  transition: opacity 0.15s ease-in-out;
+  transform: scale(0.95);
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .has-tooltip:hover .tooltip {
   visibility: visible;
   opacity: 1;
+  transform: scale(1);
 }
+
+/* ── Custom Dynamic UI Overrides ── */
+.bg-midnight-base { background-color: var(--bg-base) !important; }
+.bg-midnight-sidebar { background-color: var(--bg-sidebar) !important; }
+.bg-midnight-card { background-color: var(--bg-card) !important; }
+.bg-midnight-hover { background-color: var(--bg-card-hover) !important; }
+.border-midnight-border { border-color: var(--border-color) !important; }
+.border-midnight-bright { border-color: var(--border-bright) !important; }
