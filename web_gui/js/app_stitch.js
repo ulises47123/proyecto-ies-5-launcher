@@ -141,10 +141,13 @@ function setupEventListeners() {
 
 export function aplicarTemaVisual(tema) {
   const root = document.documentElement;
-  root.setAttribute("data-theme", tema || "midnight");
+  const targetTema = tema || "midnight";
+  if (root.getAttribute("data-theme") !== targetTema) {
+    root.setAttribute("data-theme", targetTema);
+    localStorage.setItem("campus_tema", targetTema);
+  }
   const selectTheme = document.getElementById("select-theme");
-  if (selectTheme) selectTheme.value = tema || "midnight";
-  localStorage.setItem("campus_tema", tema || "midnight");
+  if (selectTheme && selectTheme.value !== targetTema) selectTheme.value = targetTema;
 }
 
 export async function cargarTodoElCampus(forzar = false) {

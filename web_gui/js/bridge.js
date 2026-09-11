@@ -47,7 +47,7 @@ class PyloidBridge {
     if (resLaunch && resLaunch.job_id) {
       const jobId = resLaunch.job_id;
       while (true) {
-        await new Promise((r) => setTimeout(r, 100));
+        await new Promise((r) => setTimeout(r, 250));
         const pollRes = await new Promise((resolve) => {
           try {
             this._ipc.poll_job(jobId, (r) => {
