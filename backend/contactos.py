@@ -247,7 +247,7 @@ def _parse_contactos(sess: CampusSession, html: str, id_curso: str, obtener_deta
                     p["telefono"] = detalles["telefono"]
                 if detalles.get("lugar") and detalles["lugar"] != "No especificado":
                     p["lugar"] = detalles["lugar"]
-                if detalles.get("foto_url") and not p.get("foto_url"):
+                if detalles.get("foto_url"):
                     p["foto_url"] = detalles["foto_url"]
                 p.update({
                     "documento": detalles.get("documento", ""),
