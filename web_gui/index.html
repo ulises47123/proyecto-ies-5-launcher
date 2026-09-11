@@ -11,19 +11,52 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
   
   <style>
+    :root {
+      --theme-bg-base: #0e1626;
+      --theme-bg-sidebar: #141f36;
+      --theme-bg-card: #1b2a47;
+      --theme-bg-hover: #223456;
+      --theme-bg-input: #121b2d;
+      --theme-border: #2d3f63;
+    }
+    html[data-theme="dark"] {
+      --theme-bg-base: #121214;
+      --theme-bg-sidebar: #18181c;
+      --theme-bg-card: #222228;
+      --theme-bg-hover: #2a2a32;
+      --theme-bg-input: #16161a;
+      --theme-border: #33333e;
+    }
+    html[data-theme="emerald"] {
+      --theme-bg-base: #041c14;
+      --theme-bg-sidebar: #092c20;
+      --theme-bg-card: #0e3c2c;
+      --theme-bg-hover: #144c38;
+      --theme-bg-input: #07241a;
+      --theme-border: #1c5c44;
+    }
+
     @layer base {
       html, body {
         margin: 0;
         padding: 0;
-        background-color: #0e1626;
+        background-color: var(--theme-bg-base);
         color: #f8fafc;
         font-family: 'Inter', sans-serif;
         overscroll-behavior: none;
+        transition: background-color 0.25s ease, color 0.25s ease;
       }
     }
+    .bg-midnight-base { background-color: var(--theme-bg-base) !important; }
+    .bg-midnight-sidebar { background-color: var(--theme-bg-sidebar) !important; }
+    .bg-midnight-card { background-color: var(--theme-bg-card) !important; }
+    .bg-midnight-hover:hover { background-color: var(--theme-bg-hover) !important; }
+    .bg-midnight-input { background-color: var(--theme-bg-input) !important; }
+    .border-midnight-border { border-color: var(--theme-border) !important; }
+
     ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #0e1626; }
-    ::-webkit-scrollbar-thumb { background: #2d3f63; border-radius: 9999px; }
+    ::-webkit-scrollbar-track { background: var(--theme-bg-base); }
+    ::-webkit-scrollbar-thumb { background: var(--theme-border); border-radius: 9999px; }
     ::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
     .grid-pattern {
       background-size: 24px 24px;

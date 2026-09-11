@@ -25,6 +25,9 @@ const CURSO_COLORS = [
 document.addEventListener("DOMContentLoaded", async () => {
   console.log("[AppStitch] Inicializando interfaz dinámica oficial...");
 
+  const savedTema = localStorage.getItem("campus_tema") || "midnight";
+  aplicarTemaVisual(savedTema);
+
   setupEventListeners();
 
   // Intentar restaurar sesión previa de forma transparente
@@ -150,17 +153,10 @@ function setupEventListeners() {
 
 function aplicarTemaVisual(tema) {
   const root = document.documentElement;
-  if (tema === "dark") {
-    root.style.setProperty("--bg-midnight-base", "#121212");
-    document.body.style.backgroundColor = "#121212";
-  } else if (tema === "emerald") {
-    root.style.setProperty("--bg-midnight-base", "#041c14");
-    document.body.style.backgroundColor = "#041c14";
-  } else {
-    root.style.setProperty("--bg-midnight-base", "#0e1626");
-    document.body.style.backgroundColor = "#0e1626";
-  }
-  localStorage.setItem("campus_tema", tema);
+  root.setAttribute("data-theme", tema || "midnight");
+  const selectTheme = document.getElementById("select-theme");
+  if (selectTheme) selectTheme.value = tema || "midnight";
+  localStorage.setItem("campus_tema", tema || "midnight");
 }
 
 export async function cargarTodoElCampus(forzar = false) {
@@ -174,6 +170,19 @@ export async function cargarTodoElCampus(forzar = false) {
   showSection("materias"); // navegación correcta desde el inicio
 
   try {
+    // 0. Cargar configuración persistente (Tema, API Keys)
+    try {
+      const cfgRes = await bridge.getConfig();
+      if (cfgRes && cfgRes.ok && cfgRes.data) {
+        const cData = cfgRes.data;
+        if (cData.tema) aplicarTemaVisual(cData.tema);
+        const apiKeyInp = document.getElementById("ajustes-api-key");
+        if (apiKeyInp && cData.gemini_api_key) apiKeyInp.value = cData.gemini_api_key;
+        const autoSyncSel = document.getElementById("select-auto-sync");
+        if (autoSyncSel && cData.auto_sync_minutos) autoSyncSel.value = String(cData.auto_sync_minutos);
+      }
+    } catch (e) {}
+
     // 1. Obtener perfil del usuario que ingresó
     const profRes = await bridge.getProfile();
     if (profRes && profRes.ok && profRes.data) {
