@@ -28,7 +28,7 @@ class GeminiHandler:
         if not self.api_keys:
             return None
 
-        modelos = ["gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.5-flash"]
+        modelos = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
 
         for key in self.api_keys:
             for modelo in modelos:
