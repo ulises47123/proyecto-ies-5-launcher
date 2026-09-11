@@ -343,7 +343,10 @@ export function switchTab(tabName) {
   }
 
   // Carga diferida de datos según la pestaña activa
-  if (tabName === "novedades" && appState.novedades.length === 0) {
+  if (tabName === "novedades") {
+    // Siempre re-renderizar las novedades del campus al abrir el tab
+    renderNovedades();
+    // Cargar noticias institucionales del sitio si no estaban cargadas
     cargarSitioNoticias();
   } else if (tabName === "calificaciones") {
     renderCalificacionesGenerales();
