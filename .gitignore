@@ -46,3 +46,4 @@ crash_*.txt
 error_log.txt
 *.zip
 *.vbs
+repo_ref/
