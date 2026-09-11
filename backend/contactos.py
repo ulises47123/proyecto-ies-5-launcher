@@ -32,9 +32,11 @@ def get_detalle_contacto(sess: CampusSession, id_curso: str, uid: str) -> dict:
 
         # 2. Foto
         foto_url = ""
-        img = soup.find('img', class_='perfil_imagen')
+        img = soup.find('img', class_='perfil_imagen') or soup.find('img', class_=lambda c: c and 'foto' in c)
         if img:
-            foto_url = img.get('src', '')
+            foto_src = img.get('src', '')
+            if foto_src:
+                foto_url = foto_src if foto_src.startswith("http") else f"{BASE_URL}{foto_src.lstrip('/')}"
 
         # 3. Correo electrónico principal
         email = ""
@@ -169,6 +171,8 @@ def _parse_contactos(sess: CampusSession, html: str, id_curso: str, obtener_deta
                     nombre = item.get("apellido_nombre") or item.get("nombre") or ""
                     telefono = item.get("telefono") or item.get("mobile") or ""
                     foto = item.get("foto") or ""
+                    if foto and not foto.startswith("http"):
+                        foto = f"{BASE_URL}{foto.lstrip('/')}"
                     
                     if nombre:
                         nombre_limpio = limpiar_html(str(nombre)).strip()

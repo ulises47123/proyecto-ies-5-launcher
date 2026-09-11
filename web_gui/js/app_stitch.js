@@ -432,18 +432,20 @@ async function cargarSubtabPrograma(cursoId) {
               else if (estadoColor === "red" || estado.toLowerCase().includes("cerrad")) badgeColor = "bg-rose-500/20 text-rose-300 border-rose-500/40";
               else if (estadoColor === "orange" || estado.toLowerCase().includes("pendient")) badgeColor = "bg-amber-500/20 text-amber-300 border-amber-500/40";
 
+              const clickAttr = it.url ? `onclick="window.appBridgeUI.verDetalleItem('${encodeURIComponent(it.url)}', '${encodeURIComponent(it.titulo || '')}')" class="py-2.5 flex items-center justify-between hover:bg-midnight-hover px-2 rounded-lg transition-colors gap-3 cursor-pointer group"` : `class="py-2.5 flex items-center justify-between px-2 rounded-lg transition-colors gap-3"`;
+
               return `
-                <div class="py-2.5 flex items-center justify-between hover:bg-midnight-hover px-2 rounded-lg transition-colors gap-3">
-                  <div class="flex items-center gap-2.5 text-slate-200 min-w-0">
-                    <span class="material-symbols-outlined text-blue-400 text-lg shrink-0">${iconName}</span>
-                    <span class="truncate">${it.titulo || it.nombre || "Clase / Documento"}</span>
+                <div ${clickAttr}>
+                  <div class="flex items-center gap-2.5 text-slate-200 min-w-0 flex-1">
+                    <span class="material-symbols-outlined text-blue-400 group-hover:text-cyan-300 text-lg shrink-0">${iconName}</span>
+                    <span class="truncate group-hover:text-blue-300 transition-colors font-medium">${it.titulo || it.nombre || "Clase / Documento"}</span>
                   </div>
                   <div class="flex items-center gap-2 shrink-0">
                     ${estado ? `<span class="text-[10px] px-2 py-0.5 rounded border font-mono font-semibold ${badgeColor}">${estado}</span>` : ""}
                     ${it.url ? `
-                      <button onclick="window.appBridgeUI.verDetalleItem('${encodeURIComponent(it.url)}', '${encodeURIComponent(it.titulo || '')}')" class="p-1 text-slate-400 hover:text-blue-300 hover:bg-midnight-base rounded transition-colors" title="Ver detalle">
+                      <span class="p-1 text-slate-400 group-hover:text-blue-300 rounded transition-colors" title="Ver detalle">
                         <span class="material-symbols-outlined text-base">visibility</span>
-                      </button>
+                      </span>
                     ` : ""}
                   </div>
                 </div>
@@ -769,7 +771,7 @@ export async function verContactoFicha(usuarioId, cursoId) {
   }
 }
 
-export function abrirModalRedactarMensaje() {
+export async function abrirModalRedactarMensaje() {
   const titEl = document.getElementById("modal-tit");
   const bodyEl = document.getElementById("modal-body");
   const modalEl = document.getElementById("modal-detalle");
@@ -779,11 +781,35 @@ export function abrirModalRedactarMensaje() {
 
   if (titEl) titEl.innerText = "Redactar Mensaje Interno";
   if (bodyEl) {
+    bodyEl.innerHTML = `<div class="p-6 text-center text-slate-400 text-xs"><span class="material-symbols-outlined animate-spin text-lg mr-2">sync</span>Cargando destinatarios del curso...</div>`;
+  }
+  if (modalEl) modalEl.classList.remove("hidden");
+
+  let contactosOpts = `<option value="">-- Seleccionar destinatario --</option>`;
+  try {
+    const res = await bridge.getContactos(cursoId);
+    const data = res?.data || {};
+    const docentes = data.docentes || [];
+    const alumnos = data.alumnos || [];
+
+    if (docentes.length > 0) {
+      contactosOpts += `<optgroup label="Docentes">` + docentes.map(d => `<option value="${d.id || d.nombre}">${d.nombre} (${d.rol || 'Docente'})</option>`).join("") + `</optgroup>`;
+    }
+    if (alumnos.length > 0) {
+      contactosOpts += `<optgroup label="Compañeros de Cursada">` + alumnos.map(a => `<option value="${a.id || a.nombre}">${a.nombre}</option>`).join("") + `</optgroup>`;
+    }
+  } catch (e) {
+    console.warn("No se pudieron cargar contactos para el selector:", e);
+  }
+
+  if (bodyEl) {
     bodyEl.innerHTML = `
       <form id="form-env-msg" onsubmit="window.appBridgeUI.enviarMensajeHandler(event, '${cursoId}')" class="space-y-3">
         <div>
-          <label class="block text-[11px] font-semibold text-slate-400 mb-1">Destinatario (DNI o ID de Usuario / Docente)</label>
-          <input type="text" id="msg-destinatario" required class="w-full bg-midnight-input border border-midnight-border text-xs text-white p-2.5 rounded-lg focus:outline-none focus:border-blue-500" placeholder="Ej: 47123607 o Nombre"/>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1">Destinatario</label>
+          <select id="msg-destinatario" required class="w-full bg-midnight-input border border-midnight-border text-xs text-white p-2.5 rounded-lg focus:outline-none focus:border-blue-500">
+            ${contactosOpts}
+          </select>
         </div>
         <div>
           <label class="block text-[11px] font-semibold text-slate-400 mb-1">Asunto</label>
@@ -791,7 +817,13 @@ export function abrirModalRedactarMensaje() {
         </div>
         <div>
           <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cuerpo del Mensaje</label>
-          <textarea id="msg-cuerpo" rows="5" required class="w-full bg-midnight-input border border-midnight-border text-xs text-white p-2.5 rounded-lg focus:outline-none focus:border-blue-500" placeholder="Escribí aquí el contenido..."></textarea>
+          <textarea id="msg-cuerpo" rows="4" required class="w-full bg-midnight-input border border-midnight-border text-xs text-white p-2.5 rounded-lg focus:outline-none focus:border-blue-500" placeholder="Escribí aquí el contenido..."></textarea>
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1">Archivo Adjunto (Opcional)</label>
+          <div class="flex items-center gap-2">
+            <input type="file" id="msg-adjunto" class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600/30 file:text-blue-300 hover:file:bg-blue-600/50 cursor-pointer"/>
+          </div>
         </div>
         <div id="msg-env-status" class="text-xs hidden"></div>
         <div class="flex justify-end gap-2 pt-2">
@@ -815,6 +847,8 @@ export async function enviarMensajeHandler(event, cursoId) {
   const dest = document.getElementById("msg-destinatario").value.trim();
   const asunto = document.getElementById("msg-asunto").value.trim();
   const cuerpo = document.getElementById("msg-cuerpo").value.trim();
+  const adjInput = document.getElementById("msg-adjunto");
+  const archivoAdjunto = (adjInput && adjInput.files && adjInput.files[0]) ? (adjInput.files[0].path || adjInput.files[0].name) : "";
 
   if (!dest || !asunto || !cuerpo) return;
 
@@ -822,7 +856,7 @@ export async function enviarMensajeHandler(event, cursoId) {
   if (statusEl) { statusEl.className = "text-xs text-blue-400"; statusEl.innerText = "Enviando mensaje al servidor..."; statusEl.classList.remove("hidden"); }
 
   try {
-    const res = await bridge.enviarMensaje(cursoId, dest, asunto, cuerpo);
+    const res = await bridge.enviarMensaje(cursoId, dest, asunto, cuerpo, archivoAdjunto);
     if (res && res.ok) {
       if (statusEl) { statusEl.className = "text-xs text-emerald-400 font-semibold"; statusEl.innerText = "¡Mensaje enviado con éxito!"; }
       setTimeout(() => {
