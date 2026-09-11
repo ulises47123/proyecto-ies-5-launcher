@@ -98,7 +98,7 @@
 
 /* ── Base Reset & Font Styling ── */
 html {
-  font-size: 17.5px; /* Bump up base text size slightly */
+  font-size: 19px; /* Bump up base text size significantly */
 }
 body {
   background-color: var(--bg-base);
@@ -206,7 +206,32 @@ input:focus, select:focus, textarea:focus {
 .border-midnight-border { border-color: var(--border-color) !important; }
 .border-midnight-bright { border-color: var(--border-bright) !important; }
 
-/* ── Anti-Flicker & Material Symbols Space Reservation ── */
+/* ==========================================================================
+   4 MÉTODOS ANTI-PARPADEO (ANTI-FLICKERING SYSTEM)
+   ========================================================================== */
+
+/* Método 2: View Transitions API (Double Buffering Nativo del navegador) */
+@view-transition {
+  navigation: auto;
+}
+.tab-content, .subtab-content, #main-content {
+  view-transition-name: page-content;
+}
+
+/* Método 3: Forzar Aceleración 3D y Backface Visibility en Elementos Interactivos */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+img, svg, button, .glass-panel, .glass-card-interactive, .subtab-content {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Método 4: CSS Containment y Will-Change (Evita Reflows del DOM Padre al cambiar innerHTML) */
 .material-symbols-outlined {
   font-display: block;
   display: inline-block;
@@ -218,7 +243,7 @@ input:focus, select:focus, textarea:focus {
   contain: layout style;
 }
 
-main, section, aside {
-  contain: layout style;
+main, section, aside, .subtab-content, #dash-grid-materias {
+  contain: content;
+  will-change: transform, opacity, contents;
 }
-
