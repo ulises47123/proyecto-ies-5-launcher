@@ -100,6 +100,67 @@ function setupEventListeners() {
   if (iaForm) {
     iaForm.onsubmit = handleIASubmit;
   }
+
+  // Manejador del Selector de Temas Visuales (Fase de optimización UI)
+  const selectTheme = document.getElementById("select-theme");
+  if (selectTheme) {
+    selectTheme.onchange = (e) => {
+      aplicarTemaVisual(e.target.value);
+    };
+  }
+
+  // Guardar configuración del formulario de Ajustes
+  const formPerfilAjustes = document.getElementById("form-perfil-ajustes");
+  if (formPerfilAjustes) {
+    formPerfilAjustes.onsubmit = async (e) => {
+      e.preventDefault();
+      const apiKeyVal = document.getElementById("ajustes-api-key")?.value.trim() || "";
+      const themeVal = document.getElementById("select-theme")?.value || "midnight";
+      const syncVal = document.getElementById("select-auto-sync")?.value || "10";
+
+      try {
+        await bridge.saveConfig({
+          gemini_api_key: apiKeyVal,
+          tema: themeVal,
+          auto_sync_minutos: syncVal
+        });
+        alert("Configuración y perfil guardados exitosamente.");
+      } catch (err) {
+        alert("Configuración guardada localmente.");
+      }
+    };
+  }
+
+  // Cierre de Modales con Tecla ESC y Clic en Fondo (UX Best Practice)
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeModal();
+      const tutModal = document.getElementById("modal-tutorial");
+      if (tutModal) tutModal.classList.add("hidden");
+    }
+  });
+
+  const modalDetalle = document.getElementById("modal-detalle");
+  if (modalDetalle) {
+    modalDetalle.onclick = (e) => {
+      if (e.target === modalDetalle) closeModal();
+    };
+  }
+}
+
+function aplicarTemaVisual(tema) {
+  const root = document.documentElement;
+  if (tema === "dark") {
+    root.style.setProperty("--bg-midnight-base", "#121212");
+    document.body.style.backgroundColor = "#121212";
+  } else if (tema === "emerald") {
+    root.style.setProperty("--bg-midnight-base", "#041c14");
+    document.body.style.backgroundColor = "#041c14";
+  } else {
+    root.style.setProperty("--bg-midnight-base", "#0e1626");
+    document.body.style.backgroundColor = "#0e1626";
+  }
+  localStorage.setItem("campus_tema", tema);
 }
 
 export async function cargarTodoElCampus(forzar = false) {

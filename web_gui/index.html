@@ -409,11 +409,25 @@
                 Tema y Apariencia
               </h4>
               <p class="text-xs text-slate-400">Esquema de colores de la interfaz de escritorio:</p>
-              <select class="w-full bg-midnight-input border border-midnight-border text-xs text-white p-2.5 rounded-lg focus:outline-none">
-                <option selected>Azul clásico / Midnight (Stitch Design System)</option>
-                <option>Grafito Oscuro</option>
-                <option>Esmeralda Institucional</option>
+              <select id="select-theme" class="w-full bg-midnight-input border border-midnight-border text-xs text-white p-2.5 rounded-lg focus:outline-none focus:border-blue-500">
+                <option value="midnight" selected>Azul clásico / Midnight (Stitch Design System)</option>
+                <option value="dark">Grafito Oscuro</option>
+                <option value="emerald">Esmeralda Institucional</option>
               </select>
+            </div>
+
+            <div class="bg-midnight-card border border-midnight-border rounded-xl p-5 shadow-md space-y-3">
+              <h4 class="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[16px]">smart_toy</span>
+                Asistente IA (API Key Gemini / OpenAI)
+              </h4>
+              <p class="text-xs text-slate-400">API Key para activar el Asistente Académico:</p>
+              <div class="relative">
+                <input type="password" id="ajustes-api-key" class="w-full bg-midnight-input border border-midnight-border text-xs text-white p-2.5 pr-9 rounded-lg focus:outline-none focus:border-purple-500 font-mono" placeholder="AIzaSy... / sk-proj-..."/>
+                <button type="button" onclick="(function(){var i=document.getElementById('ajustes-api-key');var e=document.getElementById('eye-api-icon');if(i.type==='password'){i.type='text';e.textContent='visibility_off';}else{i.type='password';e.textContent='visibility';}})()" class="absolute right-2.5 top-2.5 text-slate-400 hover:text-white cursor-pointer">
+                  <span class="material-symbols-outlined text-[18px]" id="eye-api-icon">visibility</span>
+                </button>
+              </div>
             </div>
 
             <div class="bg-midnight-card border border-midnight-border rounded-xl p-5 shadow-md space-y-3">
@@ -422,23 +436,23 @@
                 Actualización Automática
               </h4>
               <p class="text-xs text-slate-400">Intervalo de sincronización con el servidor del campus:</p>
-              <select class="w-full bg-midnight-input border border-midnight-border text-xs text-white p-2.5 rounded-lg focus:outline-none">
-                <option selected>Cada 10 minutos (Recomendado)</option>
-                <option>Cada 5 minutos</option>
-                <option>Cada 30 minutos</option>
-                <option>Solo manual</option>
+              <select id="select-auto-sync" class="w-full bg-midnight-input border border-midnight-border text-xs text-white p-2.5 rounded-lg focus:outline-none focus:border-cyan-500">
+                <option value="10" selected>Cada 10 minutos (Recomendado)</option>
+                <option value="5">Cada 5 minutos</option>
+                <option value="30">Cada 30 minutos</option>
+                <option value="0">Solo manual</option>
               </select>
             </div>
 
-            <div class="bg-midnight-card border border-midnight-border rounded-xl p-5 shadow-md space-y-3 md:col-span-2">
+            <div class="bg-midnight-card border border-midnight-border rounded-xl p-5 shadow-md space-y-3">
               <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                 <span class="material-symbols-outlined text-[16px]">security</span>
                 Seguridad y Credenciales
               </h4>
               <div class="flex items-center justify-between p-3 bg-midnight-base/80 rounded-lg border border-midnight-border/60">
                 <div class="flex flex-col">
-                  <span class="text-xs font-bold text-white">Cifrado de Credenciales Windows DPAPI</span>
-                  <span class="text-[11px] text-slate-400">Las contraseñas no se almacenan en texto plano en ningún archivo.</span>
+                  <span class="text-xs font-bold text-white">Cifrado Windows DPAPI</span>
+                  <span class="text-[11px] text-slate-400">Credenciales cifradas localmente.</span>
                 </div>
                 <span class="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">Protegido</span>
               </div>

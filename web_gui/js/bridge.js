@@ -103,6 +103,10 @@ class PyloidBridge {
   async getSitioNoticias(force = false) { return this._call("get_sitio_noticias", Boolean(force)); }
   async buscarSitio(query, maxRes = 10) { return this._call("buscar_sitio", String(query), Number(maxRes)); }
 
+  // ── Configuración y Ajustes ──
+  async getConfig() { return this._call("get_config"); }
+  async saveConfig(cfg) { return this._call("save_config", JSON.stringify(cfg)); }
+
   // ── Inteligencia Artificial ──
   async askIA(prompt) { return this._call("ask_ia", String(prompt)); }
 }

@@ -22,8 +22,10 @@ from services import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from config import cargar_config, guardar_config, guardar_gemini_key, guardar_openai_key
 
 class CampusAPI(PyloidIPC):
     """
@@ -84,14 +86,20 @@ class CampusAPI(PyloidIPC):
 
     def _submit_job(self, func, *args, **kwargs) -> str:
         job_id = str(uuid.uuid4())
-        self._jobs[job_id] = {"done": False, "result": None}
+        now = time.time()
+        # Limpieza optimizada de jobs antiguos abandonados (> 300 segundos)
+        stale = [jid for jid, info in self._jobs.items() if now - info.get("created_at", now) > 300]
+        for jid in stale:
+            self._jobs.pop(jid, None)
+
+        self._jobs[job_id] = {"done": False, "result": None, "created_at": now}
 
         def _worker():
             try:
                 res = func(*args, **kwargs)
-                self._jobs[job_id] = {"done": True, "result": res}
+                self._jobs[job_id] = {"done": True, "result": res, "created_at": time.time()}
             except Exception as e:
-                self._jobs[job_id] = {"done": True, "result": {"ok": False, "error": str(e)}}
+                self._jobs[job_id] = {"done": True, "result": {"ok": False, "error": str(e)}, "created_at": time.time()}
 
         self._pool.submit(_worker)
         return json.dumps({"ok": True, "job_id": job_id})
@@ -201,6 +209,28 @@ class CampusAPI(PyloidIPC):
     @Bridge(str, int, result=str)
     def buscar_sitio(self, query: str, max_res: int = 10) -> str:
         return self._submit_job(self.sitio.buscar, query, max_resultados=max_res)
+
+    # ── Configuración y Ajustes ──
+    @Bridge(result=str)
+    def get_config(self) -> str:
+        cfg = cargar_config()
+        return json.dumps({"ok": True, "data": cfg})
+
+    @Bridge(str, result=str)
+    def save_config(self, config_str: str) -> str:
+        try:
+            nuevos = json.loads(config_str)
+            cfg = cargar_config()
+            cfg.update(nuevos)
+            if "gemini_api_key" in nuevos:
+                guardar_gemini_key(nuevos["gemini_api_key"])
+            if "openai_api_key" in nuevos:
+                guardar_openai_key(nuevos["openai_api_key"])
+            guardar_config(cfg)
+            return json.dumps({"ok": True})
+        except Exception as e:
+            return json.dumps({"ok": False, "error": str(e)})
+
 
 
 def main():
