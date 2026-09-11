@@ -6,11 +6,11 @@
 :root, [data-theme="midnight"] {
   --bg-base: #070a12;
   --bg-sidebar: #0d1222;
-  --bg-card: rgba(15, 23, 42, 0.75);
-  --bg-card-hover: rgba(26, 38, 66, 0.85);
-  --bg-input: rgba(15, 23, 42, 0.9);
-  --border-color: rgba(99, 102, 241, 0.18);
-  --border-bright: rgba(129, 140, 248, 0.4);
+  --bg-card: rgba(15, 23, 42, 0.95);
+  --bg-card-hover: rgba(26, 38, 66, 0.95);
+  --bg-input: #0f172a;
+  --border-color: rgba(99, 102, 241, 0.25);
+  --border-bright: rgba(129, 140, 248, 0.5);
   --primary: #6366f1;
   --primary-hover: #4f46e5;
   --primary-glow: rgba(99, 102, 241, 0.35);
@@ -27,11 +27,11 @@
 [data-theme="dark"] {
   --bg-base: #090d16;
   --bg-sidebar: #0f172a;
-  --bg-card: rgba(17, 24, 39, 0.8);
-  --bg-card-hover: rgba(30, 41, 59, 0.9);
-  --bg-input: rgba(17, 24, 39, 0.95);
-  --border-color: rgba(56, 189, 248, 0.18);
-  --border-bright: rgba(56, 189, 248, 0.45);
+  --bg-card: rgba(17, 24, 39, 0.95);
+  --bg-card-hover: rgba(30, 41, 59, 0.95);
+  --bg-input: #111827;
+  --border-color: rgba(56, 189, 248, 0.25);
+  --border-bright: rgba(56, 189, 248, 0.5);
   --primary: #38bdf8;
   --primary-hover: #0284c7;
   --primary-glow: rgba(56, 189, 248, 0.35);
@@ -48,11 +48,11 @@
 [data-theme="emerald"] {
   --bg-base: #03120f;
   --bg-sidebar: #071f1a;
-  --bg-card: rgba(6, 32, 28, 0.8);
-  --bg-card-hover: rgba(13, 53, 46, 0.9);
-  --bg-input: rgba(6, 32, 28, 0.95);
-  --border-color: rgba(16, 185, 129, 0.2);
-  --border-bright: rgba(52, 211, 153, 0.45);
+  --bg-card: rgba(6, 32, 28, 0.95);
+  --bg-card-hover: rgba(13, 53, 46, 0.95);
+  --bg-input: #06201c;
+  --border-color: rgba(16, 185, 129, 0.25);
+  --border-bright: rgba(52, 211, 153, 0.5);
   --primary: #10b981;
   --primary-hover: #059669;
   --primary-glow: rgba(16, 185, 129, 0.35);
@@ -74,6 +74,21 @@ body {
   overflow: hidden;
   user-select: none;
   transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ── Hardware Acceleration & Input Stabilization (Prevent Focus Flicker) ── */
+input, select, textarea, button {
+  -webkit-tap-highlight-color: transparent;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: auto;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4) !important;
+  border-color: #6366f1 !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
 }
 
 /* ── Custom Webkit Scrollbars ── */
@@ -100,14 +115,13 @@ body {
   scrollbar-width: none;
 }
 
-/* ── Glassmorphism & Card Utilities ── */
+/* ── Card Utilities ── */
 .glass-panel {
   background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-color);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transform: translateZ(0);
 }
 
 .glass-panel:hover {
@@ -116,14 +130,14 @@ body {
 
 .glass-card-interactive {
   background: var(--bg-card);
-  backdrop-filter: blur(12px);
   border: 1px solid var(--border-color);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+  transform: translateZ(0);
 }
 .glass-card-interactive:hover {
   background: var(--bg-card-hover);
   border-color: var(--border-bright);
-  transform: translateY(-2px);
+  transform: translateY(-2px) translateZ(0);
   box-shadow: 0 12px 24px -6px var(--primary-glow);
 }
 
@@ -134,25 +148,12 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
-@keyframes pulseGlow {
-  0%, 100% {
-    box-shadow: 0 0 15px var(--primary-glow);
-  }
-  50% {
-    box-shadow: 0 0 25px var(--accent-glow);
-  }
-}
-
-.glow-active {
-  animation: pulseGlow 3s infinite ease-in-out;
-}
-
 /* ── Tooltip Animations ── */
 .tooltip {
   visibility: hidden;
   opacity: 0;
   transform: scale(0.95);
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 .has-tooltip:hover .tooltip {
   visibility: visible;
