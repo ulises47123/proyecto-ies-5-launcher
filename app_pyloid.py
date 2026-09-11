@@ -98,7 +98,10 @@ class CampusAPI(PyloidIPC):
 
     @Bridge(str, result=str)
     def poll_job(self, job_id: str) -> str:
-        return json.dumps(self._jobs.get(job_id, {"done": True, "result": None}))
+        job = self._jobs.get(job_id, {"done": True, "result": None})
+        if job.get("done"):
+            self._jobs.pop(job_id, None)
+        return json.dumps(job)
 
     # ── Autenticación y Sesión ──
     @Bridge(result=str)
