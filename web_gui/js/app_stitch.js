@@ -39,6 +39,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       console.log("[AppStitch] Sesión previa restaurada exitosamente.");
       const viewLogin = document.getElementById("view-login");
       if (viewLogin) viewLogin.classList.add("hidden");
+      
+      if (sesion.data && sesion.data.profile) {
+        appState.usuario = sesion.data.profile;
+        actualizarPerfilUI(sesion.data.profile);
+      }
+      
       await cargarTodoElCampus();
       return;
     }
@@ -84,6 +90,17 @@ function setupEventListeners() {
         if (res && res.ok) {
           const viewLogin = document.getElementById("view-login");
           if (viewLogin) viewLogin.classList.add("hidden");
+
+          // Actualizar datos de usuario inmediatamente desde el resultado de login
+          if (res.data) {
+            appState.usuario = {
+              nombre: res.data.nombre || res.data.profile?.nombre || u,
+              dni: res.data.usuario || u,
+              foto_url: res.data.profile?.foto_url || ""
+            };
+            actualizarPerfilUI(appState.usuario);
+          }
+
           await cargarTodoElCampus();
         } else {
           if (errBox) {
@@ -138,8 +155,11 @@ export async function cargarTodoElCampus(forzar = false) {
     // 1. Perfil del estudiante
     const profRes = await bridge.getProfile();
     if (profRes && profRes.ok && profRes.data) {
-      appState.usuario = profRes.data;
-      actualizarPerfilUI(profRes.data);
+      appState.usuario = {
+        ...appState.usuario,
+        ...profRes.data
+      };
+      actualizarPerfilUI(appState.usuario);
     }
 
     // 2. Materias y avisos del escritorio
@@ -153,8 +173,8 @@ export async function cargarTodoElCampus(forzar = false) {
 
       if (curRes.data.usuario_nombre && (!appState.usuario || !appState.usuario.nombre)) {
         appState.usuario = {
-          nombre: curRes.data.usuario_nombre,
-          dni: appState.usuario?.dni || ""
+          ...appState.usuario,
+          nombre: curRes.data.usuario_nombre
         };
         actualizarPerfilUI(appState.usuario);
       }
@@ -179,10 +199,11 @@ export async function cargarTodoElCampus(forzar = false) {
     renderNovedades();
     actualizarBadgesSidebar();
 
-    // Si hay un curso disponible, cargar directorio de contactos e información en segundo plano
+    // Si hay un curso disponible, cargar el primero por defecto
     if (appState.cursos.length > 0) {
       const primerCursoId = appState.cursos[0].id;
       appState.cursoActivo = appState.cursos[0];
+      cargarProgramaCurso(primerCursoId);
       cargarContactosCurso(primerCursoId);
       cargarCalificacionesCurso(primerCursoId);
     }
@@ -281,35 +302,36 @@ function renderEstadisticasEscritorio() {
   if (statNov) statNov.innerText = appState.novedades.length;
 }
 
-// 1. Renderizar Materias
+// 1. Renderizar Materias en Escritorio y Pestaña de Materias
 export function renderMaterias() {
-  const container = document.getElementById("curso-programa-container");
-  if (!container) return;
+  const containerDash = document.getElementById("dash-grid-materias");
+  const containerTab = document.getElementById("materias-grid");
 
   if (appState.cursos.length === 0) {
-    container.innerHTML = `
-      <div class="p-8 text-center bg-midnight-card border border-midnight-border rounded-2xl">
+    const emptyHtml = `
+      <div class="col-span-full p-8 text-center bg-midnight-card border border-midnight-border rounded-2xl">
         <span class="material-symbols-outlined text-slate-500 text-4xl mb-2">menu_book</span>
         <h4 class="text-sm font-bold text-white">No hay materias registradas</h4>
         <p class="text-xs text-slate-400 mt-1">Presioná "Sincronizar" en la barra superior para actualizar tu cursada.</p>
       </div>
     `;
+    if (containerDash) containerDash.innerHTML = emptyHtml;
+    if (containerTab) containerTab.innerHTML = emptyHtml;
     return;
   }
 
-  container.innerHTML = appState.cursos.map((c) => {
+  const itemsHtml = appState.cursos.map((c) => {
     const avance = c.avance !== undefined ? c.avance : 70;
     const ultAcceso = c.ultimo_acceso || "Reciente";
-    const novedadTxt = c.no_leidos ? `${c.no_leidos} sin leer` : "Al día";
+    const novedadTxt = c.items_obl ? `${c.items_obl} actividades` : "Al día";
 
     return `
       <div class="glass-card-interactive p-5 rounded-2xl space-y-3">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <span class="w-3 h-3 rounded-full" style="background-color: ${c.color}"></span>
-            <span class="text-xs font-bold text-white">${c.nombre}</span>
+            <span class="w-3.5 h-3.5 rounded-full shadow-sm" style="background-color: ${c.color}"></span>
+            <span class="text-xs font-bold text-white leading-snug">${c.nombre}</span>
           </div>
-          <span class="text-[10px] font-mono text-slate-400">Acceso: ${ultAcceso}</span>
         </div>
         <div class="flex items-center justify-between text-xs text-slate-300">
           <span>Estado: <strong class="text-indigo-400">${novedadTxt}</strong></span>
@@ -318,9 +340,49 @@ export function renderMaterias() {
         <div class="w-full bg-midnight-base rounded-full h-2 overflow-hidden border border-midnight-border">
           <div class="bg-gradient-to-r from-indigo-500 to-cyan-400 h-2 rounded-full" style="width: ${avance}%"></div>
         </div>
+        <div class="pt-2 flex justify-between items-center text-[10px] text-slate-400 font-mono">
+          <span>Acceso: ${ultAcceso}</span>
+          <button onclick="cambiarCursoActivo('${c.id}'); switchTab('materias');" class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer">
+            Ver clases &rarr;
+          </button>
+        </div>
       </div>
     `;
   }).join("");
+
+  if (containerDash) containerDash.innerHTML = itemsHtml;
+  if (containerTab) containerTab.innerHTML = itemsHtml;
+}
+
+// Cargar programa desglosado por unidades de la materia activa
+async function cargarProgramaCurso(cursoId) {
+  const container = document.getElementById("curso-programa-container");
+  if (!container) return;
+
+  container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs"><span class="material-symbols-outlined animate-spin text-xl mr-2">sync</span>Cargando programa y clases...</div>`;
+
+  try {
+    const res = await bridge.getPrograma(cursoId);
+    if (res && res.ok && res.data) {
+      const unidades = res.data.unidades || res.data || [];
+      if (unidades.length === 0) {
+        container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs">No hay clases ni recursos publicados en esta materia.</div>`;
+        return;
+      }
+
+      container.innerHTML = unidades.map((u, idx) => `
+        <div class="p-4 rounded-2xl bg-midnight-card border border-midnight-border space-y-2">
+          <h4 class="text-xs font-bold text-white flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px]">Unidad ${idx + 1}</span>
+            <span>${u.nombre || u.titulo || 'Contenido Temático'}</span>
+          </h4>
+          <p class="text-[11px] text-slate-300">${u.descripcion || 'Material didáctico y clases de la asignatura.'}</p>
+        </div>
+      `).join("");
+    }
+  } catch (err) {
+    container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs">No se pudieron obtener las clases de la materia.</div>`;
+  }
 }
 
 // 2. Renderizar Actividades Pendientes
@@ -587,6 +649,19 @@ export function closeModal() {
   if (modalEl) modalEl.classList.add("hidden");
 }
 
+function mostrarIndicadorCarga(cargando) {
+  const syncIcon = document.getElementById("sync-icon");
+  const syncText = document.getElementById("sync-text");
+
+  if (cargando) {
+    if (syncIcon) syncIcon.classList.add("animate-spin");
+    if (syncText) syncText.innerText = "Sincronizando...";
+  } else {
+    if (syncIcon) syncIcon.classList.remove("animate-spin");
+    if (syncText) syncText.innerText = "Sincronizado";
+  }
+}
+
 // Funciones globales expuestas al ámbito window
 window.switchTab = switchTab;
 window.aplicarTemaVisual = aplicarTemaVisual;
@@ -603,6 +678,7 @@ window.cambiarCursoActivo = (cursoId) => {
   const c = appState.cursos.find(x => String(x.id) === String(cursoId));
   if (c) {
     appState.cursoActivo = c;
+    cargarProgramaCurso(c.id);
     cargarContactosCurso(c.id);
     cargarCalificacionesCurso(c.id);
   }

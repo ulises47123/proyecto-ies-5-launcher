@@ -5,6 +5,11 @@ y delegar las acciones a la capa services/ sin acoplamiento a HTML ni a detalles
 """
 import os
 import sys
+
+# Desactivar hilos GPU inestables en Qt WebEngine para eliminar parpadeos en Windows
+os.environ["QTWEBENGINE_DISABLE_GPU_THREAD"] = "1"
+os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--enable-features=UseSkiaRenderer --disable-gpu-compositing"
+
 import json
 import logging
 from typing import Dict, Any

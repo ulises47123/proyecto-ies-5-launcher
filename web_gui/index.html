@@ -299,6 +299,20 @@
           </div>
         </div>
 
+        <!-- Enrolled Courses Grid -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <span class="material-symbols-outlined text-indigo-400 text-[18px]">auto_stories</span>
+              <span>Mis Materias & Cursadas Activas</span>
+            </h3>
+            <button onclick="switchTab('materias')" class="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 cursor-pointer">Ver contenido completo &rarr;</button>
+          </div>
+          <div id="dash-grid-materias" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="col-span-full text-center py-6 text-slate-500 text-xs">Sincronizando materias del usuario...</div>
+          </div>
+        </div>
+
         <!-- Dashboard Content Grid -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- Pending Activities Widget -->
@@ -335,14 +349,23 @@
       <section id="tab-materias" class="tab-content space-y-6 hidden">
         <div class="flex items-center justify-between">
           <div>
-            <h2 class="text-xl font-extrabold text-white">Programa de la Materia</h2>
-            <p class="text-xs text-slate-400" id="materias-curso-titulo">Seleccioná una materia para ver su contenido</p>
+            <h2 class="text-xl font-extrabold text-white">Programa de Cursada</h2>
+            <p class="text-xs text-slate-400" id="materias-curso-titulo">Explorá las asignaturas inscriptas y su contenido por unidades</p>
           </div>
         </div>
 
+        <!-- Enrolled Courses Grid in Materias Tab -->
+        <div id="materias-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Dynamic Course Cards -->
+        </div>
+
         <div class="glass-panel p-6 rounded-3xl space-y-4">
+          <h3 class="text-sm font-bold text-white border-b border-midnight-border pb-3 flex items-center gap-2">
+            <span class="material-symbols-outlined text-cyan-400 text-[18px]">folder_open</span>
+            <span>Unidades Temáticas & Recursos Descargables</span>
+          </h3>
           <div id="curso-programa-container" class="space-y-3">
-            <div class="text-center py-12 text-slate-400 text-xs">Cargando unidades del programa...</div>
+            <div class="text-center py-12 text-slate-400 text-xs">Seleccioná una materia arriba para desplegar sus clases y archivos.</div>
           </div>
         </div>
       </section>
