@@ -585,7 +585,7 @@ function renderContactos(miembrosData) {
 
     return `
       <div class="glass-card-interactive p-4 rounded-2xl flex items-center gap-3.5">
-        <img src="${foto}" alt="${nombreStr}" class="w-12 h-12 rounded-full border border-midnight-bright object-cover bg-slate-800 shrink-0">
+        <img src="${foto}" alt="${nombreStr}" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'%2394a3b8\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z\'/%3E%3C/svg%3E';" class="w-12 h-12 rounded-full border border-midnight-bright object-cover bg-slate-800 shrink-0">
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2 mb-1">
             <span class="px-2 py-0.5 rounded-full border text-[9px] font-bold uppercase ${badgeRole}">
