@@ -165,7 +165,7 @@
         <div class="space-y-1.5">
           <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Materia Actual</label>
           <div class="relative">
-            <select id="curso-dropdown" onchange="cambiarCursoActivo(this.value)" class="w-full bg-midnight-card border border-midnight-border text-white text-xs font-semibold rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 truncate cursor-pointer shadow-sm">
+            <select id="curso-dropdown" onchange="cambiarCursoActivo(this.value); switchTab('materias');" class="w-full bg-midnight-card border border-midnight-border text-white text-xs font-semibold rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 truncate cursor-pointer shadow-sm">
               <option value="">Cargando materias...</option>
             </select>
           </div>

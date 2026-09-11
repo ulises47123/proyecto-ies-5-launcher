@@ -371,14 +371,17 @@ export function renderMaterias() {
     const ultAcceso = cleanText(c.ultimo_acceso, "Reciente");
     const novedadTxt = c.items_obl ? `${c.items_obl} actividades` : "Al día";
     const nomMat = cleanText(c.nombre, "Materia");
+    const esActivo = appState.cursoActivo && String(appState.cursoActivo.id) === String(c.id);
+    const borderClass = esActivo ? "border-2 border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/20" : "border border-midnight-border";
 
     return `
-      <div class="glass-card-interactive p-5 rounded-2xl space-y-3">
+      <div onclick="cambiarCursoActivo('${c.id}'); switchTab('materias');" class="glass-card-interactive p-5 rounded-2xl space-y-3 cursor-pointer ${borderClass} transition-all">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <span class="w-3.5 h-3.5 rounded-full shadow-sm" style="background-color: ${c.color}"></span>
+            <span class="w-3.5 h-3.5 rounded-full shadow-sm shrink-0" style="background-color: ${c.color}"></span>
             <span class="text-xs font-bold text-white leading-snug">${nomMat}</span>
           </div>
+          ${esActivo ? `<span class="px-2 py-0.5 rounded-full bg-indigo-500 text-white text-[9px] font-extrabold uppercase shrink-0">Activa</span>` : ''}
         </div>
         <div class="flex items-center justify-between text-xs text-slate-300">
           <span>Estado: <strong class="text-indigo-400">${novedadTxt}</strong></span>
@@ -389,9 +392,9 @@ export function renderMaterias() {
         </div>
         <div class="pt-2 flex justify-between items-center text-[10px] text-slate-400 font-mono">
           <span>Acceso: ${ultAcceso}</span>
-          <button onclick="cambiarCursoActivo('${c.id}'); switchTab('materias');" class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer">
-            Ver clases &rarr;
-          </button>
+          <span class="px-3 py-1.5 ${esActivo ? 'bg-indigo-500 text-white' : 'bg-indigo-600/80 hover:bg-indigo-500 text-white'} rounded-xl text-xs font-bold transition-all">
+            ${esActivo ? 'Viendo clases ✓' : 'Ver clases &rarr;'}
+          </span>
         </div>
       </div>
     `;
@@ -401,33 +404,75 @@ export function renderMaterias() {
   if (containerTab) containerTab.innerHTML = itemsHtml;
 }
 
-// Cargar programa desglosado por unidades de la materia activa
+// Cargar programa desglosado por unidades e ítems/clases de la materia activa
 async function cargarProgramaCurso(cursoId) {
   const container = document.getElementById("curso-programa-container");
   if (!container) return;
 
-  container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs"><span class="material-symbols-outlined animate-spin text-xl mr-2">sync</span>Cargando programa y clases...</div>`;
+  container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs"><span class="material-symbols-outlined animate-spin text-xl mr-2">sync</span>Cargando clases y contenido de la asignatura...</div>`;
 
   try {
     const res = await bridge.getPrograma(cursoId);
     if (res && res.ok && res.data) {
       const unidades = res.data.unidades || res.data || [];
-      if (unidades.length === 0) {
+      if (!Array.isArray(unidades) || unidades.length === 0) {
         container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs">No hay clases ni recursos publicados en esta materia.</div>`;
         return;
       }
 
-      container.innerHTML = unidades.map((u, idx) => `
-        <div class="p-4 rounded-2xl bg-midnight-card border border-midnight-border space-y-2">
-          <h4 class="text-xs font-bold text-white flex items-center gap-2">
-            <span class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px]">Unidad ${idx + 1}</span>
-            <span>${cleanText(u.nombre || u.titulo, 'Contenido Temático')}</span>
-          </h4>
-          <p class="text-[11px] text-slate-300">${cleanText(u.descripcion, 'Material didáctico y clases de la asignatura.')}</p>
-        </div>
-      `).join("");
+      container.innerHTML = unidades.map((u, idx) => {
+        const itemsList = Array.isArray(u.items) ? u.items : [];
+        const itemsHtml = itemsList.length > 0 ? itemsList.map(item => {
+          const tipo = (item.tipo || "").toLowerCase();
+          let icon = "article";
+          let iconColor = "text-slate-400";
+          if (tipo.includes("actividad")) { icon = "edit_note"; iconColor = "text-amber-400"; }
+          else if (tipo.includes("archivo")) { icon = "attach_file"; iconColor = "text-cyan-400"; }
+          else if (tipo.includes("texto")) { icon = "description"; iconColor = "text-indigo-400"; }
+          else if (tipo.includes("link")) { icon = "link"; iconColor = "text-emerald-400"; }
+
+          const tituloStr = cleanText(item.titulo || item.nombre, "Clase / Recurso");
+          const tipoDescStr = cleanText(item.tipo_desc || item.tipo, "Recurso pedagógico");
+          const urlStr = item.url || item.href || "";
+
+          return `
+            <div class="p-3 rounded-xl bg-midnight-base/80 border border-midnight-border/60 flex items-center justify-between gap-3 hover:border-indigo-500/40 transition-all">
+              <div class="flex items-center gap-3 min-w-0">
+                <span class="material-symbols-outlined text-[20px] ${iconColor} shrink-0">${icon}</span>
+                <div class="min-w-0">
+                  <h5 class="text-xs font-semibold text-white truncate">${tituloStr}</h5>
+                  <span class="text-[10px] text-slate-400 block">${tipoDescStr}</span>
+                </div>
+              </div>
+              ${urlStr ? `
+                <button onclick="verDetalleItem('${encodeURIComponent(tituloStr)}', '${encodeURIComponent(urlStr)}')" class="px-2.5 py-1 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 rounded-lg text-[10px] font-bold shrink-0 transition-colors cursor-pointer">
+                  Ver detalle &rarr;
+                </button>
+              ` : ''}
+            </div>
+          `;
+        }).join("") : `<div class="text-[11px] text-slate-400 italic p-2">Material pedagógico de la unidad.</div>`;
+
+        return `
+          <div class="p-4.5 rounded-2xl bg-midnight-card border border-midnight-border space-y-3">
+            <div class="flex items-center justify-between border-b border-midnight-border/60 pb-2.5">
+              <h4 class="text-xs font-bold text-white flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px] font-mono border border-indigo-500/30">Unidad ${idx + 1}</span>
+                <span>${cleanText(u.nombre || u.titulo, 'Contenido Temático')}</span>
+              </h4>
+            </div>
+            ${u.descripcion ? `<p class="text-[11px] text-slate-300 leading-relaxed">${cleanText(u.descripcion, '')}</p>` : ''}
+            <div class="space-y-2 pt-1">
+              ${itemsHtml}
+            </div>
+          </div>
+        `;
+      }).join("");
+    } else {
+      container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs">No se pudieron obtener las clases de la materia.</div>`;
     }
   } catch (err) {
+    console.error("Error cargando programa de curso:", err);
     container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs">No se pudieron obtener las clases de la materia.</div>`;
   }
 }
@@ -751,14 +796,49 @@ export async function sendIAMsg(q) {
 }
 
 // Global Modal Control
-export function verDetalleItem(titulo, detalle) {
+export async function verDetalleItem(titulo, detalleOrUrl) {
   const titEl = document.getElementById("modal-tit");
   const bodyEl = document.getElementById("modal-body");
   const modalEl = document.getElementById("modal-detalle");
 
-  if (titEl) titEl.innerText = decodeURIComponent(titulo);
-  if (bodyEl) bodyEl.innerText = decodeURIComponent(detalle);
+  const titStr = decodeURIComponent(titulo || "Detalle");
+  const rawDet = decodeURIComponent(detalleOrUrl || "");
+
+  if (titEl) titEl.innerText = titStr;
   if (modalEl) modalEl.classList.remove("hidden");
+
+  // Si rawDet parece una URL de actividad/recurso del campus
+  if (rawDet.startsWith("http") || rawDet.includes(".cgi")) {
+    if (bodyEl) bodyEl.innerHTML = `<div class="p-6 text-center text-slate-400 text-xs"><span class="material-symbols-outlined animate-spin text-xl mr-2">sync</span>Cargando consigna y detalles del aula virtual...</div>`;
+
+    try {
+      const res = await bridge.getActividadDetalle(rawDet);
+      if (res && res.ok && res.data) {
+        const info = res.data;
+        const consigna = info.consigna || info.descripcion || info.texto || info.titulo || "Sin consigna adicional especificada.";
+        const fecha = info.fecha_limite || info.fecha_apertura || "";
+        const estado = info.estado || "";
+
+        let html = "";
+        if (fecha || estado) {
+          html += `
+            <div class="flex items-center justify-between p-3 rounded-xl bg-midnight-base border border-midnight-border mb-4 text-xs font-mono">
+              ${fecha ? `<span class="text-slate-300">📅 Límite / Apertura: <strong>${fecha}</strong></span>` : ''}
+              ${estado ? `<span class="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold">${estado}</span>` : ''}
+            </div>
+          `;
+        }
+        html += `<div class="prose prose-invert max-w-none text-xs text-slate-200 leading-relaxed whitespace-pre-line">${consigna}</div>`;
+        if (bodyEl) bodyEl.innerHTML = html;
+      } else {
+        if (bodyEl) bodyEl.innerText = rawDet;
+      }
+    } catch (e) {
+      if (bodyEl) bodyEl.innerText = rawDet;
+    }
+  } else {
+    if (bodyEl) bodyEl.innerText = rawDet;
+  }
 }
 
 export function closeModal() {
@@ -796,11 +876,31 @@ window.cambiarCursoActivo = (cursoId) => {
   const c = appState.cursos.find(x => String(x.id) === String(cursoId));
   if (c) {
     appState.cursoActivo = c;
+
+    // 1. Sincronizar el valor del selector desplegable en la barra lateral
+    const selectEl = document.getElementById("curso-dropdown");
+    if (selectEl) selectEl.value = String(cursoId);
+
+    // 2. Actualizar el título de la materia seleccionada
     const nombreEl = document.getElementById("curso-detail-nombre");
     if (nombreEl) nombreEl.innerText = c.nombre;
+
+    // 3. Re-renderizar tarjetas para destacar la materia activa
+    renderMaterias();
+
+    // 4. Cargar programa, miembros y notas
     cargarProgramaCurso(c.id);
     cargarContactosCurso(c.id);
     cargarCalificacionesCurso(c.id);
+
+    // 5. Scroll suave al detalle de la materia si está en la pestaña de materias
+    const targetTab = document.getElementById("tab-materias");
+    if (targetTab && !targetTab.classList.contains("hidden")) {
+      const detailBox = document.getElementById("curso-detail-container");
+      if (detailBox) {
+        detailBox.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
   }
 };
 window.usarPromptChip = (txt) => {
