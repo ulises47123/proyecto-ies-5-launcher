@@ -385,7 +385,7 @@ export function switchTab(tabName) {
 }
 
 export function switchCursoSubtab(subtabName) {
-  // Alternar sub-pestañas dentro del detalle de la materia (Programa, Miembros, Calificaciones)
+  // Alternar sub-pestañas dentro del detalle de la materia (Programa, Miembros, Calificaciones, Mensajes)
   const subtabs = document.querySelectorAll(".subtab-content");
   subtabs.forEach(st => st.classList.add("hidden"));
 
@@ -393,7 +393,7 @@ export function switchCursoSubtab(subtabName) {
   if (targetSubtab) targetSubtab.classList.remove("hidden");
 
   // Actualizar estilos de los botones de sub-pestaña
-  ["programa", "contactos", "calificaciones"].forEach(st => {
+  ["programa", "mensajes", "contactos", "calificaciones"].forEach(st => {
     const btn = document.getElementById(`btn-subtab-${st}`);
     if (btn) {
       if (st === subtabName) {
@@ -404,12 +404,14 @@ export function switchCursoSubtab(subtabName) {
     }
   });
 
-  // Cargar datos diferidos si se selecciona la sub-pestaña de miembros o calificaciones
+  // Cargar datos diferidos si se selecciona la sub-pestaña
   if (appState.cursoActivo) {
     if (subtabName === "contactos") {
       cargarContactosCurso(appState.cursoActivo.id);
     } else if (subtabName === "calificaciones") {
       cargarCalificacionesCurso(appState.cursoActivo.id);
+    } else if (subtabName === "mensajes") {
+      cargarMensajesBandeja('Inbox');
     }
   }
 }
@@ -753,6 +755,73 @@ async function cargarCalificacionesCurso(cursoId) {
   }
 }
 
+// ==========================================
+// SECCIÓN MENSAJERÍA (Bandeja y Redacción)
+// ==========================================
+window.cargarMensajesBandeja = async (bandeja = 'Inbox') => {
+  if (!appState.cursoActivo) return;
+  const cursoId = appState.cursoActivo.id;
+  const container = document.getElementById("curso-mensajes-container");
+  if (!container) return;
+
+  container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs"><span class="material-symbols-outlined animate-spin text-xl mr-2">sync</span>Cargando bandeja ${bandeja === 'Inbox' ? 'de entrada' : 'de salida'}...</div>`;
+
+  try {
+    const res = await bridge.getMensajes(cursoId, bandeja);
+    if (res && res.ok && res.data) {
+      renderMensajes(res.data, bandeja);
+    } else {
+      container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs">No se pudieron obtener los mensajes de la bandeja.</div>`;
+    }
+  } catch (err) {
+    console.warn("Error cargando mensajes:", err);
+    container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs">Error de conexión al cargar la bandeja.</div>`;
+  }
+};
+
+function renderMensajes(mensajes, bandeja) {
+  const container = document.getElementById("curso-mensajes-container");
+  if (!container) return;
+
+  if (!mensajes || mensajes.length === 0) {
+    container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs">No hay mensajes en la bandeja de ${bandeja === 'Inbox' ? 'Recibidos' : 'Enviados'}.</div>`;
+    return;
+  }
+
+  container.innerHTML = mensajes.map((m, idx) => {
+    const remitente = cleanText(m.remitente || m.destinatario || m.autor, "Usuario");
+    const asunto = cleanText(m.asunto || m.titulo, "(Sin asunto)");
+    const fecha = cleanText(m.fecha || m.fecha_envio, "");
+    const noLeido = m.no_leido === true || m.estado === 'no_leido';
+    const link = m.link || m.url || m.id;
+    
+    const iconColor = noLeido ? "text-indigo-400 font-extrabold" : "text-slate-400";
+    const bg = noLeido ? "bg-indigo-500/10 border border-indigo-500/30" : "bg-midnight-card border border-midnight-border";
+
+    return `
+      <div class="p-4 rounded-2xl ${bg} flex items-center justify-between gap-3 hover:border-indigo-500/50 transition-all cursor-pointer" onclick="verDetalleMensaje('${encodeURIComponent(link)}')">
+        <div class="flex items-center gap-3 min-w-0">
+          <span class="material-symbols-outlined text-[20px] ${iconColor} shrink-0">mail</span>
+          <div class="min-w-0">
+            <h5 class="text-xs ${noLeido ? 'font-extrabold text-white' : 'font-semibold text-slate-200'} truncate">${asunto}</h5>
+            <span class="text-[10px] text-slate-400 block">${remitente} &bull; ${fecha}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+window.verDetalleMensaje = async (linkEncoded) => {
+  const link = decodeURIComponent(linkEncoded);
+  const title = `Mensaje`;
+  verDetalleItem(title, link, "mensaje");
+};
+
+window.redactarNuevoMensaje = () => {
+  alert("La redacción interactiva requiere abrir un modal de envíos. (Función en desarrollo para v3.1)");
+};
+
 function renderCalificaciones(notas) {
   const container = document.getElementById("curso-calificaciones-container");
   if (!container) return;
@@ -933,7 +1002,7 @@ export async function sendIAMsg(q) {
 }
 
 // Global Modal Control
-export async function verDetalleItem(titulo, detalleOrUrl) {
+export async function verDetalleItem(titulo, detalleOrUrl, tipo = null) {
   const titEl = document.getElementById("modal-tit");
   const bodyEl = document.getElementById("modal-body");
   const modalEl = document.getElementById("modal-detalle");
@@ -943,6 +1012,33 @@ export async function verDetalleItem(titulo, detalleOrUrl) {
 
   if (titEl) titEl.innerText = titStr;
   if (modalEl) modalEl.classList.remove("hidden");
+
+  if (tipo === "mensaje") {
+    if (bodyEl) bodyEl.innerHTML = `<div class="p-6 text-center text-slate-400 text-xs"><span class="material-symbols-outlined animate-spin text-xl mr-2">sync</span>Abriendo mensaje...</div>`;
+    try {
+      const res = await bridge.getMensajeDetalle(rawDet, appState.cursoActivo ? appState.cursoActivo.id : "");
+      if (res && res.ok && res.data) {
+        const msg = res.data;
+        let html = `<div class="p-4 bg-midnight-card border border-midnight-border rounded-xl">
+          <div class="mb-4 pb-4 border-b border-midnight-border">
+            <h4 class="text-sm font-bold text-white mb-2">${cleanText(msg.asunto || msg.titulo, "Sin asunto")}</h4>
+            <div class="text-[11px] text-slate-400">
+              <span class="block">De: <strong class="text-slate-300">${cleanText(msg.remitente || msg.autor, "Desconocido")}</strong></span>
+              <span class="block">Para: ${cleanText(msg.destinatario || msg.para, "Mí")}</span>
+              <span class="block mt-1">Fecha: ${cleanText(msg.fecha || msg.fecha_envio, "Reciente")}</span>
+            </div>
+          </div>
+          <div class="prose prose-invert max-w-none text-xs text-slate-200 leading-relaxed whitespace-pre-line">${msg.cuerpo || msg.texto || "Mensaje vacío."}</div>
+        </div>`;
+        if (bodyEl) bodyEl.innerHTML = html;
+      } else {
+        if (bodyEl) bodyEl.innerText = "No se pudo cargar el mensaje.";
+      }
+    } catch(err) {
+      if (bodyEl) bodyEl.innerText = "Error abriendo mensaje";
+    }
+    return;
+  }
 
   // Si rawDet parece una URL de actividad/recurso del campus
   if (rawDet.startsWith("http") || rawDet.includes(".cgi")) {

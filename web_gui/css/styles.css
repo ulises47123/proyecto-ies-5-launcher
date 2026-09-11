@@ -97,6 +97,9 @@
 [data-theme="light"] .border-midnight-border { border-color: #cbd5e1 !important; }
 
 /* ── Base Reset & Font Styling ── */
+html {
+  font-size: 17.5px; /* Bump up base text size slightly */
+}
 body {
   background-color: var(--bg-base);
   color: var(--text-main);
