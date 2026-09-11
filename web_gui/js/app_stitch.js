@@ -170,11 +170,11 @@ function actualizarPerfilUI(u) {
   const avatarImg = document.getElementById("user-avatar-img");
   const avatarIcon = document.getElementById("user-avatar-icon");
 
-  if (nombreEl) nombreEl.innerText = u.nombre || u.usuario || "Estudiante";
-  if (dniEl) dniEl.innerText = u.dni ? `DNI: ${u.dni}` : (u.usuario ? `Usuario: ${u.usuario}` : "IES N°5 Tello");
+  if (nombreEl) nombreEl.innerText = u.nombre || u.usuario || "—";
+  if (dniEl) dniEl.innerText = u.dni ? `DNI: ${u.dni}` : (u.usuario ? `Usuario: ${u.usuario}` : "—");
 
   const topCarrera = document.getElementById("top-carrera");
-  if (topCarrera) topCarrera.innerText = u.carrera || u.carreras || "IES N°5 José Eugenio Tello";
+  if (topCarrera) topCarrera.innerText = u.carrera || u.carreras || "";
 
   const inpNom = document.getElementById("ajustes-perfil-nombre");
   const inpDni = document.getElementById("ajustes-perfil-dni");

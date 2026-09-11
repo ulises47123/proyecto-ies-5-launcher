@@ -102,39 +102,63 @@ class CampusAPI(PyloidIPC):
     # ── Cursos y Escritorio ──
     @Bridge(bool, result=str)
     def get_cursos(self, forzar: bool = False) -> str:
-        return json.dumps(self.cursos.get_cursos_y_novedades(forzar_recarga=forzar))
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            future = executor.submit(self.cursos.get_cursos_y_novedades, forzar_recarga=forzar)
+            return json.dumps(future.result())
 
     # ── Contactos y Miembros ──
     @Bridge(str, bool, result=str)
     def get_contactos(self, curso_id: str, forzar: bool = False) -> str:
-        return json.dumps(self.contactos.get_contactos_curso(curso_id, forzar_recarga=forzar))
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            future = executor.submit(self.contactos.get_contactos_curso, curso_id, forzar_recarga=forzar)
+            return json.dumps(future.result())
 
     @Bridge(str, str, result=str)
     def get_perfil(self, curso_id: str, usuario_id: str) -> str:
-        return json.dumps(self.contactos.get_perfil_usuario(curso_id, usuario_id))
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            future = executor.submit(self.contactos.get_perfil_usuario, curso_id, usuario_id)
+            return json.dumps(future.result())
 
     # ── Actividades y Clases ──
     @Bridge(str, result=str)
     def get_programa(self, curso_id: str) -> str:
-        return json.dumps(self.actividades.get_programa_materia(curso_id))
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            future = executor.submit(self.actividades.get_programa_materia, curso_id)
+            return json.dumps(future.result())
 
     @Bridge(str, result=str)
     def get_actividad_detalle(self, url: str) -> str:
-        return json.dumps(self.actividades.get_detalle_actividad(url))
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            future = executor.submit(self.actividades.get_detalle_actividad, url)
+            return json.dumps(future.result())
 
     @Bridge(result=str)
     def get_pendientes(self) -> str:
-        return json.dumps(self.actividades.get_registro_pendientes())
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            future = executor.submit(self.actividades.get_registro_pendientes)
+            return json.dumps(future.result())
 
     # ── Calificaciones ──
     @Bridge(str, result=str)
     def get_calificaciones(self, curso_id: str) -> str:
-        return json.dumps(self.calificaciones.get_calificaciones_curso(curso_id))
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            future = executor.submit(self.calificaciones.get_calificaciones_curso, curso_id)
+            return json.dumps(future.result())
 
     # ── Mensajería / Webmail ──
     @Bridge(str, str, result=str)
     def get_mensajes(self, curso_id: str, bandeja: str = "Inbox") -> str:
-        return json.dumps(self.mensajes.get_mensajes_bandeja(curso_id, bandeja=bandeja))
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            future = executor.submit(self.mensajes.get_mensajes_bandeja, curso_id, bandeja=bandeja)
+            return json.dumps(future.result())
 
     # ── Sitio Institucional ──
     @Bridge(bool, result=str)
