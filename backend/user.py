@@ -6,9 +6,10 @@ import os
 import re
 import json
 import logging
+from bs4 import BeautifulSoup
 from backend.session import CampusSession
 from backend.scraper import decode_html, extract_var
-from config import CONFIG_DIR, USER_CACHE_FILE
+from config import CONFIG_DIR, USER_CACHE_FILE, BASE_URL
 
 def get_current_user(sess: CampusSession = None, cache_dir: str = CONFIG_DIR, force_network: bool = False) -> dict:
     """

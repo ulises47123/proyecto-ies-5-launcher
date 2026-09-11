@@ -248,14 +248,30 @@ def main():
 
     app = Pyloid(app_name="CampusTello-Launcher")
 
+    icon_path = os.path.join(app_dir, "assets", "escudo.ico")
+    if not os.path.exists(icon_path):
+        icon_path = os.path.join(app_dir, "Escudo-I.E.S.-N-5.png")
+
+    if os.path.exists(icon_path):
+        try:
+            app.set_icon(icon_path)
+        except Exception:
+            pass
+
     # Crear ventana principal con adaptador IPC registrado
     window = app.create_window(
-        title="launcher oficial ies N° 5",
+        title="Campus Virtual IES N°5 — Launcher Oficial",
         width=1280,
         height=850,
         dev_tools=False,
         IPCs=[CampusAPI()]
     )
+
+    if os.path.exists(icon_path):
+        try:
+            window.set_icon(icon_path)
+        except Exception:
+            pass
 
     # Cargar interfaz web oficial estilo Stitch Midnight
     window.load_file(html_file)
