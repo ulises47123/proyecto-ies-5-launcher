@@ -63,95 +63,120 @@ class CampusAPI:
 
     # ── Autenticación ──
 
-    def check_auth() -> Dict[str, Any]:
-        return self.auth.verificar_sesion()
+    def check_auth(self) -> Dict[str, Any]:
+        """Verifica si hay sesión activa."""
+        return self.auth.is_authenticated()
 
-    def restore_session() -> Dict[str, Any]:
-        res = self.auth.restaurar_sesion()
+    def restore_session(self) -> Dict[str, Any]:
+        """Intenta restaurar la sesión guardada (cookies o credenciales)."""
+        res = self.auth.restaurar_sesion_guardada()
         if res.get("ok"):
             self._init_servicios()
         return res
 
     def login(self, usuario: str, clave: str, recordar: bool = True, autologin: bool = True) -> Dict[str, Any]:
-        res = self.auth.login(usuario, clave, recordar, autologin)
+        """Autentica al usuario con sus credenciales."""
+        res = self.auth.login_con_credenciales(usuario, clave, recordar, autologin)
         if res.get("ok"):
             self._init_servicios()
         return res
 
-    def logout() -> Dict[str, Any]:
+    def logout(self) -> Dict[str, Any]:
+        """Cierra la sesión activa."""
         res = self.auth.logout()
         self._sess = None
         self._cursos = None
         return res
 
-    def get_profile() -> Dict[str, Any]:
-        return self.auth.get_perfil_usuario()
+    def get_profile(self) -> Dict[str, Any]:
+        """Obtiene el perfil del usuario autenticado."""
+        return self.auth.get_user_profile()
 
     # ── Materias / Cursos ──
 
     def get_cursos(self, force: bool = False) -> Dict[str, Any]:
+        """Obtiene la lista de materias y novedades del escritorio."""
         self._init_servicios()
-        return self._cursos.get_cursos(force=force)
-
-    def get_contactos(self, curso_id: str, force: bool = False) -> Dict[str, Any]:
-        self._init_servicios()
-        return self._contactos.get_contactos(curso_id, force=force)
-
-    def get_perfil(self, curso_id: str, usuario_id: str) -> Dict[str, Any]:
-        self._init_servicios()
-        return self._contactos.get_perfil(curso_id, usuario_id)
+        return self._cursos.get_cursos_y_novedades(forzar_recarga=force)
 
     def get_programa(self, curso_id: str) -> Dict[str, Any]:
+        """Obtiene el programa (unidades e ítems) de una materia."""
         self._init_servicios()
-        return self._cursos.get_programa(curso_id)
+        return self._cursos.get_programa(str(curso_id))
+
+    # ── Contactos ──
+
+    def get_contactos(self, curso_id: str, force: bool = False) -> Dict[str, Any]:
+        """Obtiene el directorio de docentes y alumnos de un curso."""
+        self._init_servicios()
+        return self._contactos.get_contactos_curso(str(curso_id), forzar_recarga=force)
+
+    def get_perfil(self, curso_id: str, usuario_id: str) -> Dict[str, Any]:
+        """Obtiene el perfil detallado de un usuario de un curso."""
+        self._init_servicios()
+        return self._contactos.get_perfil_usuario(str(curso_id), str(usuario_id))
+
+    # ── Actividades ──
 
     def get_actividad_detalle(self, url: str) -> Dict[str, Any]:
+        """Obtiene el detalle de una actividad a partir de su URL."""
         self._init_servicios()
-        return self._actividades.get_actividad_detalle(url)
+        return self._actividades.get_detalle_actividad(str(url))
 
-    def get_pendientes() -> Dict[str, Any]:
+    def get_pendientes(self) -> Dict[str, Any]:
+        """Obtiene el registro de actividades pendientes guardadas localmente."""
         self._init_servicios()
-        return self._actividades.get_pendientes()
+        return self._actividades.get_registro_pendientes()
 
     # ── Calificaciones ──
 
     def get_calificaciones(self, curso_id: str) -> Dict[str, Any]:
+        """Obtiene las calificaciones de un curso."""
         self._init_servicios()
-        return self._calificaciones.get_calificaciones(curso_id)
+        return self._calificaciones.get_calificaciones_curso(str(curso_id))
 
     # ── Mensajería ──
 
     def get_mensajes(self, curso_id: str, bandeja: str = "Inbox") -> Dict[str, Any]:
+        """Obtiene la lista de mensajes de la bandeja indicada."""
         self._init_servicios()
-        return self._mensajes.get_mensajes(curso_id, bandeja)
+        return self._mensajes.get_mensajes_bandeja(str(curso_id), bandeja)
 
     def get_mensaje_detalle(self, link_o_id: str, curso_id: str = "") -> Dict[str, Any]:
+        """Obtiene el contenido completo de un mensaje."""
         self._init_servicios()
-        return self._mensajes.get_mensaje_detalle(link_o_id, curso_id)
+        return self._mensajes.get_detalle_mensaje(str(link_o_id), id_curso=str(curso_id))
 
     def enviar_mensaje(self, curso_id: str, destinatarios: str, asunto: str, cuerpo: str, archivo_adjunto: str = "") -> Dict[str, Any]:
+        """Envía un nuevo mensaje de webmail."""
         self._init_servicios()
-        return self._mensajes.enviar_mensaje(curso_id, destinatarios, asunto, cuerpo, archivo_adjunto)
+        adj = archivo_adjunto if archivo_adjunto and archivo_adjunto.strip() else None
+        return self._mensajes.enviar_mensaje(str(curso_id), destinatarios, asunto, cuerpo, adj)
 
     def responder_mensaje(self, curso_id: str, email_id: str, destinatario_id: str, asunto: str, cuerpo: str) -> Dict[str, Any]:
+        """Responde un mensaje del webmail."""
         self._init_servicios()
-        return self._mensajes.responder_mensaje(curso_id, email_id, destinatario_id, asunto, cuerpo)
+        return self._mensajes.responder(str(curso_id), str(email_id), str(destinatario_id), asunto, cuerpo)
 
     def reenviar_mensaje(self, curso_id: str, email_id: str, destinatario_id: str, asunto: str, nota: str = "") -> Dict[str, Any]:
+        """Reenvía un mensaje del webmail."""
         self._init_servicios()
-        return self._mensajes.reenviar_mensaje(curso_id, email_id, destinatario_id, asunto, nota)
+        return self._mensajes.reenviar(str(curso_id), str(email_id), str(destinatario_id), asunto, nota)
 
     def eliminar_mensaje(self, curso_id: str, email_id: str) -> Dict[str, Any]:
+        """Mueve un mensaje a la papelera."""
         self._init_servicios()
-        return self._mensajes.eliminar_mensaje(curso_id, email_id)
+        return self._mensajes.eliminar(str(curso_id), str(email_id))
 
     def vaciar_papelera(self, curso_id: str) -> Dict[str, Any]:
+        """Vacía la papelera del webmail del curso."""
         self._init_servicios()
-        return self._mensajes.vaciar_papelera(curso_id)
+        return self._mensajes.vaciar_papelera(str(curso_id))
 
     # ── Sitio Institucional y Noticias ──
 
     def get_sitio_noticias(self, force: bool = False) -> Dict[str, Any]:
+        """Obtiene noticias y recursos del sitio institucional."""
         self._init_servicios()
         return self._sitio.get_noticias(force=force)
 
@@ -160,18 +185,21 @@ class CampusAPI:
         return self.get_sitio_noticias(force=force)
 
     def buscar_sitio(self, query: str, max_res: int = 10) -> Dict[str, Any]:
+        """Busca en el sitio institucional."""
         self._init_servicios()
         return self._sitio.buscar_sitio(query, max_res)
 
     # ── Ajustes y Configuración ──
 
     def get_config(self) -> Dict[str, Any]:
+        """Obtiene la configuración actual de la aplicación."""
         try:
             return {"ok": True, "data": cargar_config(), "error": None}
         except Exception as e:
             return {"ok": False, "data": None, "error": str(e)}
 
     def save_config(self, cfg_json: str) -> Dict[str, Any]:
+        """Guarda la configuración de la aplicación."""
         try:
             data = json.loads(cfg_json) if isinstance(cfg_json, str) else cfg_json
             guardar_config(data)
@@ -182,6 +210,7 @@ class CampusAPI:
     # ── Asistente IA ──
 
     def ask_ia(self, prompt: str) -> Dict[str, Any]:
+        """Consulta al asistente de IA con el contexto del campus."""
         self._init_servicios()
         return self._ia.consultar(prompt)
 

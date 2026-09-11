@@ -177,7 +177,7 @@ class CampusAPI(PyloidIPC):
     # ── Sitio Institucional ──
     @Bridge(bool, result=str)
     def get_sitio_noticias(self, forzar: bool = False) -> str:
-        return self._submit_job(self.sitio.get_noticias_y_recursos, forzar_recarga=forzar)
+        return self._submit_job(self.sitio.get_noticias, force=forzar)
 
     # ── Inteligencia Artificial ──
     @Bridge(str, result=str)
@@ -213,7 +213,7 @@ class CampusAPI(PyloidIPC):
     # ── Búsqueda en Sitio Institucional ──
     @Bridge(str, int, result=str)
     def buscar_sitio(self, query: str, max_res: int = 10) -> str:
-        return self._submit_job(self.sitio.buscar, query, max_resultados=max_res)
+        return self._submit_job(self.sitio.buscar_sitio, query, max_res)
 
     # ── Configuración y Ajustes ──
     @Bridge(result=str)

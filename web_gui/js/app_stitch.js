@@ -30,6 +30,48 @@ function cleanText(val, fallback = "—") {
   return s ? s : fallback;
 }
 
+/**
+ * fmtFecha — Convierte "YYYY MM DD HH MM" (formato campus Educativa) a "DD/MM/YYYY HH:MM".
+ * Si no coincide con ese formato, devuelve el valor original sin modificar.
+ * @param {string} fechaStr
+ * @returns {string}
+ */
+function fmtFecha(fechaStr) {
+  if (!fechaStr) return "—";
+  const s = String(fechaStr).trim();
+  // Formato campus: "2026 08 18 20 51"
+  const m = s.match(/^(\d{4})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})$/);
+  if (m) {
+    const [, yyyy, mm, dd, hh, min] = m;
+    return `${dd.padStart(2,"0")}/${mm.padStart(2,"0")}/${yyyy} ${hh.padStart(2,"0")}:${min.padStart(2,"0")}`;
+  }
+  return s;
+}
+
+/**
+ * edadRelativa — Convierte "YYYY MM DD HH MM" a descripción relativa ("hace 3 días", etc.)
+ * @param {string} fechaStr
+ * @returns {string}
+ */
+function edadRelativa(fechaStr) {
+  if (!fechaStr) return "—";
+  const s = String(fechaStr).trim();
+  const m = s.match(/^(\d{4})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})$/);
+  if (!m) return s;
+  const [, yyyy, mm, dd, hh, min] = m;
+  const dt = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(min));
+  const diff = Math.floor((Date.now() - dt.getTime()) / 1000);
+  if (diff < 60) return "hace un momento";
+  if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
+  if (diff < 86400) return `hace ${Math.floor(diff / 3600)}h`;
+  const dias = Math.floor(diff / 86400);
+  if (dias === 1) return "ayer";
+  if (dias < 7) return `hace ${dias} días`;
+  if (dias < 30) return `hace ${Math.floor(dias / 7)} semana(s)`;
+  if (dias < 365) return `hace ${Math.floor(dias / 30)} mes(es)`;
+  return `hace ${Math.floor(dias / 365)} año(s)`;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   console.log("[AppStitch] Inicializando interfaz oficial v3.0...");
 
@@ -366,16 +408,26 @@ export function renderMaterias() {
     return;
   }
 
-  const itemsHtml = appState.cursos.map((c) => {
+  /**
+   * buildCard — Genera HTML de tarjeta para una materia.
+   * @param {Object} c — curso del appState
+   * @param {boolean} enTab — true si está dentro de la pestaña de materias (sólo scroll, sin cambio de tab)
+   */
+  const buildCard = (c, enTab = false) => {
     const avance = c.avance !== undefined && c.avance !== null ? c.avance : 70;
     const ultAcceso = cleanText(c.ultimo_acceso, "Reciente");
     const novedadTxt = c.items_obl ? `${c.items_obl} actividades` : "Al día";
     const nomMat = cleanText(c.nombre, "Materia");
     const esActivo = appState.cursoActivo && String(appState.cursoActivo.id) === String(c.id);
     const borderClass = esActivo ? "border-2 border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/20" : "border border-midnight-border";
+    // Desde el dashboard: switchTab('materias') primero, luego scroll al detalle.
+    // Desde la pestaña de materias: sólo cambiarCursoActivo() que ya hace scroll.
+    const clickAction = enTab
+      ? `cambiarCursoActivo('${c.id}')`
+      : `switchTab('materias'); cambiarCursoActivo('${c.id}')`;
 
     return `
-      <div onclick="cambiarCursoActivo('${c.id}'); switchTab('materias');" class="glass-card-interactive p-5 rounded-2xl space-y-3 cursor-pointer ${borderClass} transition-all">
+      <div onclick="${clickAction}" class="glass-card-interactive p-5 rounded-2xl space-y-3 cursor-pointer ${borderClass} transition-all">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <span class="w-3.5 h-3.5 rounded-full shadow-sm shrink-0" style="background-color: ${c.color}"></span>
@@ -398,10 +450,10 @@ export function renderMaterias() {
         </div>
       </div>
     `;
-  }).join("");
+  };
 
-  if (containerDash) containerDash.innerHTML = itemsHtml;
-  if (containerTab) containerTab.innerHTML = itemsHtml;
+  if (containerDash) containerDash.innerHTML = appState.cursos.map(c => buildCard(c, false)).join("");
+  if (containerTab)  containerTab.innerHTML  = appState.cursos.map(c => buildCard(c, true)).join("");
 }
 
 // Cargar programa desglosado por unidades e ítems/clases de la materia activa
@@ -522,24 +574,68 @@ export function renderPendientes() {
 
 // 3. Renderizar Novedades del Aula
 export function renderNovedades() {
-  const container = document.getElementById("dash-list-novedades");
-  if (!container) return;
+  const containerDash = document.getElementById("dash-list-novedades");
+  const containerTab  = document.getElementById("tab-novedades-list");
+
+  const TIPO_ICON = {
+    "email":     "📧",
+    "prg_texto": "📄",
+    "unidad":    "📦",
+    "nota":      "🎓",
+    "actividad": "✏️",
+    "foro":      "💬",
+  };
 
   if (appState.novedades.length === 0) {
-    container.innerHTML = `<div class="p-6 text-center text-slate-400 text-xs">Sin avisos nuevos en el aula virtual.</div>`;
+    const emptyHtml = `<div class="p-6 text-center text-slate-400 text-xs">Sin avisos nuevos en el aula virtual.</div>`;
+    if (containerDash) containerDash.innerHTML = emptyHtml;
+    if (containerTab)  containerTab.innerHTML  = emptyHtml;
     return;
   }
 
-  container.innerHTML = appState.novedades.map((n) => `
-    <div class="p-3.5 rounded-2xl bg-midnight-base border border-midnight-border space-y-1">
-      <div class="flex items-center justify-between">
-        <span class="text-[11px] font-bold text-indigo-400">${cleanText(n.nombre_curso, "Aviso")}</span>
-        <span class="text-[10px] text-slate-500 font-mono">${cleanText(n.fecha, "—")}</span>
+  // Ordenar de más reciente a más antigua (string "YYYY MM DD HH MM" se ordena lexicográficamente)
+  const ordenadas = [...appState.novedades].sort((a, b) => {
+    const fa = String(a.fecha || "").trim();
+    const fb = String(b.fecha || "").trim();
+    return fb.localeCompare(fa);
+  });
+
+  const buildHtml = (novedades, compact = false) => novedades.map((n) => {
+    const icono     = TIPO_ICON[n.clase] || "🔔";
+    const fechaFmt  = fmtFecha(n.fecha);
+    const edadTxt   = edadRelativa(n.fecha);
+    const titulo    = cleanText(n.nombre_item || n.nombre_unidad || n.titulo, "Publicación del campus");
+    const curso     = cleanText(n.nombre_curso, "");
+    const remitente = n.remitente ? `👤 ${n.remitente}` : "";
+    const infoCurso = [remitente, curso ? `📍 ${curso}` : ""].filter(Boolean).join("  •  ");
+
+    if (compact) {
+      return `
+        <div class="p-3.5 rounded-2xl bg-midnight-base border border-midnight-border space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold text-indigo-400">${icono} ${cleanText(n.nombre_curso, "Aviso")}</span>
+            <span class="text-[10px] text-slate-500 font-mono" title="${fechaFmt}">${edadTxt}</span>
+          </div>
+          <h5 class="text-xs font-bold text-white">${titulo}</h5>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="p-4 rounded-2xl bg-midnight-card border border-midnight-border space-y-2 hover:border-indigo-500/40 transition-all">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-[11px] font-bold text-indigo-400">${icono} ${cleanText(n.clase || "aviso", "aviso").toUpperCase()}</span>
+          <span class="px-2 py-0.5 rounded-full bg-midnight-base border border-midnight-border text-[10px] text-slate-400 font-mono" title="${fechaFmt}">${edadTxt}</span>
+        </div>
+        <h5 class="text-xs font-bold text-white leading-snug">${titulo}</h5>
+        ${infoCurso ? `<p class="text-[11px] text-slate-400">${infoCurso}</p>` : ""}
+        <p class="text-[11px] text-slate-500 font-mono">📅 ${fechaFmt}</p>
       </div>
-      <h5 class="text-xs font-bold text-white">${cleanText(n.nombre_item || n.titulo, "Publicación")}</h5>
-      <p class="text-[11px] text-slate-300 line-clamp-2">${cleanText(n.resumen, "Ingresá al aula para leer el comunicado completo.")}</p>
-    </div>
-  `).join("");
+    `;
+  }).join("");
+
+  if (containerDash) containerDash.innerHTML = buildHtml(ordenadas.slice(0, 8), true);
+  if (containerTab)  containerTab.innerHTML  = buildHtml(ordenadas, false);
 }
 
 // 4. Directorio de Contactos Integrado (Docentes & Alumnos de la Materia Activa)
@@ -628,13 +724,14 @@ function renderCalificaciones(notas) {
 
   container.innerHTML = notas.map(n => `
     <div class="p-4 rounded-2xl bg-midnight-card border border-midnight-border flex items-center justify-between">
-      <div>
-        <h5 class="text-xs font-bold text-white">${cleanText(n.evaluacion || n.titulo, 'Evaluación')}</h5>
-        <span class="text-[10px] text-slate-400 font-mono">Fecha: ${cleanText(n.fecha, 'Reciente')}</span>
+      <div class="min-w-0 flex-1">
+        <h5 class="text-xs font-bold text-white truncate">${cleanText(n.nombre || n.evaluacion || n.titulo, 'Evaluación')}</h5>
+        <span class="text-[10px] text-slate-400 font-mono">${cleanText(n.categoria || n.docente, '')}${n.fecha ? ' · ' + n.fecha : ''}</span>
+        ${n.observaciones ? `<p class="text-[10px] text-slate-500 mt-1 truncate">${n.observaciones}</p>` : ''}
       </div>
-      <div class="text-right">
-        <span class="text-lg font-extrabold text-emerald-400 font-mono">${cleanText(n.nota, 'Aprobado')}</span>
-        <span class="block text-[10px] text-slate-400">${cleanText(n.estado, 'Calificado')}</span>
+      <div class="text-right ml-4 shrink-0">
+        <span class="text-lg font-extrabold text-emerald-400 font-mono">${cleanText(n.nota, '—')}</span>
+        <span class="block text-[10px] text-slate-400">${cleanText(n.estado || '', 'Calificado')}</span>
       </div>
     </div>
   `).join("");
@@ -672,8 +769,8 @@ export function renderCalificacionesGenerales() {
             <div class="text-[11px] text-slate-400 italic">Notas de evaluaciones pendientes de publicación.</div>
           ` : notasCurso.map(n => `
             <div class="flex items-center justify-between text-xs py-1 border-b border-midnight-border/40">
-              <span class="text-slate-300">${cleanText(n.evaluacion || n.titulo, 'Evaluación')}</span>
-              <span class="font-bold text-emerald-400 font-mono">${cleanText(n.nota, 'Aprobado')}</span>
+              <span class="text-slate-300">${cleanText(n.nombre || n.evaluacion || n.titulo, 'Evaluación')}</span>
+              <span class="font-bold text-emerald-400 font-mono">${cleanText(n.nota, '—')}</span>
             </div>
           `).join("")}
         </div>
