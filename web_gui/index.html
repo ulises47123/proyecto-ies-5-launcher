@@ -139,8 +139,50 @@
       </div>
     </div>
 
+    <!-- ==================== 1B. WELCOME VIEW (PERFIL: ESTUDIANTE / DOCENTE / ADMIN) ==================== -->
+    <div id="view-welcome" class="absolute inset-0 z-50 hidden items-center justify-center p-6 overflow-hidden" style="background: radial-gradient(1200px 600px at 50% -10%, rgba(99,102,241,.18), transparent), var(--bg-base); transform: translateZ(0); backface-visibility: hidden;">
+      <div class="w-full max-w-4xl mx-auto flex flex-col items-center gap-7 animate-welcome-in">
+        <!-- Badge de perfil detectado dinámicamente -->
+        <span id="welcome-perfil-badge" class="px-4 py-1.5 rounded-full bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 text-sm font-extrabold uppercase tracking-widest flex items-center gap-2">
+          <span class="material-symbols-outlined text-[18px]" id="welcome-perfil-icon">school</span>
+          <span id="welcome-perfil-text">Estudiante</span>
+        </span>
+
+        <!-- Saludo principal -->
+        <div class="text-center space-y-3">
+          <h2 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight">
+            ¡Bienvenido/a, <span id="welcome-user-name" class="text-gradient">…</span>! 👋
+          </h2>
+          <p class="text-base text-slate-400 max-w-2xl mx-auto" id="welcome-subtitle">
+            Tu panel unificado del Instituto de Educación Superior N°5 te espera.
+          </p>
+          <p class="text-xs text-slate-500 font-mono mt-1">
+            Identificador independiente de persona: <span id="welcome-user-id" class="text-indigo-400 font-bold">—</span>
+          </p>
+        </div>
+
+        <!-- Marquee de tarjetas (estilo shadcn/ui Marquee) -->
+        <div class="relative w-full flex flex-col items-center justify-center overflow-hidden py-2">
+          <div class="marquee-wrap w-full">
+            <div class="marquee-track" id="marquee-row-1"></div>
+          </div>
+          <div class="marquee-wrap w-full mt-4">
+            <div class="marquee-track marquee-reverse" id="marquee-row-2"></div>
+          </div>
+          <div class="pointer-events-none absolute inset-y-0 left-0 w-1/4" style="background: linear-gradient(to right, var(--bg-base), transparent);"></div>
+          <div class="pointer-events-none absolute inset-y-0 right-0 w-1/4" style="background: linear-gradient(to left, var(--bg-base), transparent);"></div>
+        </div>
+
+        <!-- Botón de acceso -->
+        <button onclick="entrarAlCampus()" class="group px-10 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-2xl text-base font-extrabold tracking-wide shadow-2xl shadow-indigo-600/40 flex items-center gap-3 transition-all cursor-pointer active:scale-95">
+          <span>Entrar a mi Campus</span>
+          <span class="material-symbols-outlined text-[22px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
+        </button>
+      </div>
+    </div>
+
     <!-- ==================== 2. MAIN NAVIGATION SIDEBAR ==================== -->
-    <aside class="w-64 bg-midnight-sidebar/90 border-r border-midnight-border flex flex-col justify-between select-none z-20 shrink-0">
+    <aside class="w-80 bg-midnight-sidebar/90 border-r border-midnight-border flex flex-col justify-between select-none z-20 shrink-0">
       
       <!-- Navigation Tabs -->
       <div class="p-4 space-y-5 overflow-y-auto no-scrollbar">

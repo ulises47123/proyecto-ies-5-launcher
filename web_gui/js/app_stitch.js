@@ -9,6 +9,8 @@ import { bridge } from "./bridge.js";
 
 export const appState = {
   usuario: null,
+  perfil: "estudiante",       // estudiante | docente | administrativo (detectado dinámicamente)
+  id_perfil: "",              // ID único e independiente por persona (derivado del DNI)
   cursos: [],
   pendientes: [],
   novedades: [],
@@ -17,6 +19,17 @@ export const appState = {
   contactosCache: {},
   calificacionesCache: {},
   mensajesCache: {}
+};
+
+// Clave de almacenamiento local SIEMPRE asociada al id_perfil: cada persona es independiente.
+function lsKey(sufijo) {
+  return `campus_${appState.id_perfil || "anon"}_${sufijo}`;
+}
+
+const PERFIL_META = {
+  estudiante:      { icono: "school",     etiqueta: "Estudiante",      sub: "Revisá tus próximas entregas, clases y novedades en tiempo real.",  clase: "bg-indigo-500/15 border-indigo-500/40 text-indigo-300" },
+  docente:         { icono: "person_pin", etiqueta: "Docente",          sub: "Gestioná tus cursos, publica materiales y seguí a tus alumnos.",     clase: "bg-purple-500/15 border-purple-500/40 text-purple-300" },
+  administrativo:  { icono: "badge",      etiqueta: "Administrativo",   sub: "Panel de gestión institucional del IES N°5.",                       clase: "bg-cyan-500/15 border-cyan-500/40 text-cyan-300" },
 };
 
 const CURSO_COLORS = [
@@ -82,8 +95,130 @@ function edadRelativa(fechaStr) {
   return `hace ${Math.floor(dias / 365)} año(s)`;
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// MÁQUINA DE VISTAS: login → welcome (por perfil) → campus
+// Cada vista es un contenedor independiente con opacity+visibility (nunca
+// display:none durante la transición) para evitar parpadeos / reflows.
+// ══════════════════════════════════════════════════════════════════════════
+const VISTAS = ["view-login", "view-welcome"];
+
+function mostrarVista(id) {
+  VISTAS.forEach((v) => {
+    const el = document.getElementById(v);
+    if (!el) return;
+    if (v === id) {
+      el.classList.remove("hidden");
+      el.style.opacity = "1";
+      el.style.visibility = "visible";
+      el.style.pointerEvents = "auto";
+    } else {
+      el.style.opacity = "0";
+      el.style.visibility = "hidden";
+      el.style.pointerEvents = "none";
+      // ocultar del layout recién cuando termina el fade (sin parpadeo)
+      setTimeout(() => { if (el.style.visibility === "hidden") el.classList.add("hidden"); }, 260);
+    }
+  });
+}
+
+function aplicarPerfilAlUI(info) {
+  if (!info) return;
+  appState.perfil = info.perfil || appState.perfil;
+  appState.id_perfil = info.id_perfil || appState.id_perfil || "";
+}
+
+function renderWelcome(perfilInfo) {
+  const meta = PERFIL_META[appState.perfil] || PERFIL_META.estudiante;
+  const nombre = cleanText(appState.usuario?.nombre || perfilInfo?.nombre || "", appState.perfil || "Estudiante").split(" ")[0];
+
+  const badge = document.getElementById("welcome-perfil-badge");
+  const icono = document.getElementById("welcome-perfil-icon");
+  const texto = document.getElementById("welcome-perfil-text");
+  const nameEl = document.getElementById("welcome-user-name");
+  const subEl = document.getElementById("welcome-subtitle");
+  const idEl = document.getElementById("welcome-user-id");
+
+  if (badge) badge.className = `px-4 py-1.5 rounded-full border text-sm font-extrabold uppercase tracking-widest flex items-center gap-2 ${meta.clase}`;
+  if (icono) icono.innerText = meta.icono;
+  if (texto) texto.innerText = meta.etiqueta;
+  if (nameEl) nameEl.innerText = nombre;
+  if (subEl) subEl.innerText = meta.sub;
+  if (idEl) idEl.innerText = appState.id_perfil ? `${appState.id_perfil} (${appState.usuario?.dni || appState.perfil})` : "calculando…";
+
+  poblarMarqueeBienvenida();
+}
+
+// Tarjetas estilo Marquee (shadcn/ui) — contenido dinámico según perfil y datos reales
+function poblarMarqueeBienvenida() {
+  const row1 = document.getElementById("marquee-row-1");
+  const row2 = document.getElementById("marquee-row-2");
+  if (!row1 || !row2) return;
+
+  let cards = [];
+  if (appState.perfil === "docente") {
+    cards = [
+      { t: "Mis Cursos", d: "Accedé al programa, unidades y recursos de cada asignatura.", i: "library_books" },
+      { t: "Publicar Materiales", d: "Subí archivos, textos y actividades para tus alumnos.", i: "upload_file" },
+      { t: "Directorio de Alumnos", d: "Contactos, perfiles y estadísticas por curso.", i: "groups" },
+      { t: "Calificaciones", d: "Registrá y revisá notas de cada evaluación.", i: "grade" },
+      { t: "Mensajería Interna", d: "Envía avisos y responde consultas del aula virtual.", i: "mail" },
+      { t: "Asistente IA", d: "Gemini te ayuda a planificar clases y consignas.", i: "smart_toy" },
+    ];
+  } else if (appState.perfil === "administrativo") {
+    cards = [
+      { t: "Gestión Institucional", d: "Visión general de cursos, inscriptos y actividad.", i: "account_balance" },
+      { t: "Sitio Informativo", d: "Noticias y comunicados oficiales del IES N°5.", i: "newspaper" },
+      { t: "Directorio Completo", d: "Docentes, alumnos y personal de la institución.", i: "directory_sync" },
+      { t: "Reportes Rápidos", d: "Exportación de datos y seguimiento académico.", i: "summarize" },
+      { t: "Mensajería", d: "Comunicación con equipos académicos y estudiantiles.", i: "forum" },
+      { t: "Asistente IA", d: "Consultas administrativas asistidas por Gemini.", i: "smart_toy" },
+    ];
+  } else {
+    cards = [
+      { t: "Mis Materias", d: "Programa completo por unidades, clases y recursos.", i: "auto_stories" },
+      { t: "Próximas Entregas", d: "Actividades pendientes con fechas límite en tiempo real.", i: "assignment_late" },
+      { t: "Mis Notas", d: "Calificaciones consolidadas de todas las asignaturas.", i: "grade" },
+      { t: "Novedades del Aula", d: "Avisos de docentes y publicaciones recientes.", i: "campaign" },
+      { t: "Webmail Interno", d: "Bandeja de entrada y mensajes del campus.", i: "mail" },
+      { t: "Asistente IA", d: "Preguntá sobre tus materias, entregas y calendario.", i: "smart_toy" },
+    ];
+  }
+
+  const cardHtml = (c) => `
+    <div class="review-card">
+      <div class="flex flex-row items-center gap-2">
+        <span class="w-8 h-8 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 flex items-center justify-center shrink-0">
+          <span class="material-symbols-outlined text-[18px]">${c.i}</span>
+        </span>
+        <div class="flex flex-col min-w-0">
+          <p class="text-sm font-semibold text-white truncate">${c.t}</p>
+          <p class="text-xs text-white/40 font-medium capitalize">${appState.perfil}</p>
+        </div>
+      </div>
+      <blockquote class="mt-2 text-sm text-slate-300 leading-snug">${c.d}</blockquote>
+    </div>`;
+
+  const half = Math.ceil(cards.length / 2);
+  const fila1 = cards.slice(0, half), fila2 = cards.slice(half);
+  // Duplicamos el contenido para que el loop CSS sea continuo sin saltos
+  row1.innerHTML = [...fila1, ...fila1].map(cardHtml).join("");
+  row2.innerHTML = [...fila2, ...fila2].map(cardHtml).join("");
+}
+
+// Entrada desde la pantalla de bienvenida hacia el campus (prefetch ya hecho: sin spinner largo)
+window.entrarAlCampus = async () => {
+  mostrarVista(null); // desvanece login y welcome dejando ver el menú principal
+  try {
+    if (!campusListo) await cargarTodoElCampus();
+  } catch (e) {
+    console.warn("Error al entrar al campus:", e);
+  }
+};
+
+let campusListo = false;
+
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[AppStitch] Inicializando interfaz oficial v3.0...");
+  console.log("[AppStitch] Inicializando interfaz oficial v3.1...");
 
   // Restaurar tema visual guardado
   const savedTema = localStorage.getItem("campus_tema") || "midnight";
@@ -91,30 +226,43 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   setupEventListeners();
 
+  // Estado inicial: solo la vista de LOGIN visible (independiente, sin parpadeos)
+  mostrarVista("view-login");
+
   // Intentar restaurar sesión de usuario de forma transparente
   try {
     const sesion = await bridge.restoreSession();
     if (sesion && sesion.ok) {
       console.log("[AppStitch] Sesión previa restaurada exitosamente.");
-      const viewLogin = document.getElementById("view-login");
-      if (viewLogin) viewLogin.classList.add("hidden");
-      
-      if (sesion.data && sesion.data.profile) {
-        appState.usuario = sesion.data.profile;
-        actualizarPerfilUI(sesion.data.profile);
+      if (sesion.data) {
+        aplicarPerfilAlUI(sesion.data.perfil_info);
+        if (sesion.data.profile) {
+          appState.usuario = sesion.data.profile;
+          actualizarPerfilUI(sesion.data.profile);
+        }
       }
-      
-      await cargarTodoElCampus();
+      renderWelcome(sesion.data?.perfil_info);
+      mostrarVista("view-welcome");
+      prefetchCampus(); // carga en segundo plano mientras el usuario lee la bienvenida
       return;
     }
   } catch (err) {
     console.log("[AppStitch] Sin sesión transparente guardada:", err);
   }
 
-  // Si no hay sesión previa activa, mostrar pantalla de inicio de sesión
-  const viewLogin = document.getElementById("view-login");
-  if (viewLogin) viewLogin.classList.remove("hidden");
+  // Si no hay sesión previa activa, quedarse en la pantalla de inicio de sesión
+  mostrarVista("view-login");
 });
+
+async function prefetchCampus() {
+  try {
+    await cargarTodoElCampus();
+    campusListo = true;
+  } catch (e) {
+    console.warn("[AppStitch] Prefetch del campus falló (se reintentará al entrar):", e);
+    campusListo = false;
+  }
+}
 
 function setupEventListeners() {
   // Formulario de Inicio de Sesión
@@ -147,20 +295,22 @@ function setupEventListeners() {
       try {
         const res = await bridge.login(u, p, recordar, autologin);
         if (res && res.ok) {
-          const viewLogin = document.getElementById("view-login");
-          if (viewLogin) viewLogin.classList.add("hidden");
-
           // Actualizar datos de usuario inmediatamente desde el resultado de login
           if (res.data) {
+            aplicarPerfilAlUI(res.data.perfil_info);
             appState.usuario = {
               nombre: res.data.nombre || res.data.profile?.nombre || u,
               dni: res.data.usuario || u,
-              foto_url: res.data.profile?.foto_url || ""
+              foto_url: res.data.profile?.foto_url || "",
+              ...(res.data.profile || {})
             };
             actualizarPerfilUI(appState.usuario);
           }
 
-          await cargarTodoElCampus();
+          // Transición limpia: login → pantalla de bienvenida (sin parpadeos)
+          renderWelcome(res.data?.perfil_info);
+          mostrarVista("view-welcome");
+          prefetchCampus(); // optimización: precarga el campus mientras se ve la bienvenida
         } else {
           if (errBox) {
             errBox.innerText = res?.error || "Usuario o clave incorrectos en la plataforma IES N°5.";
@@ -213,13 +363,15 @@ export async function cargarTodoElCampus(forzar = false) {
   mostrarIndicadorCarga(true);
 
   try {
-    // 1. Perfil del estudiante
+    // 1. Perfil del usuario (estudiante / docente / administrativo)
     const profRes = await bridge.getProfile();
     if (profRes && profRes.ok && profRes.data) {
       appState.usuario = {
         ...appState.usuario,
         ...profRes.data
       };
+      if (profRes.data.id_perfil) appState.id_perfil = profRes.data.id_perfil;
+      if (profRes.data.perfil) appState.perfil = profRes.data.perfil;
       actualizarPerfilUI(appState.usuario);
     }
 
@@ -324,6 +476,13 @@ function actualizarPerfilUI(u) {
 
   if (topUserSec) topUserSec.classList.remove("hidden");
 
+  // Etiqueta de rol dinámica según el perfil detectado (cada persona es independiente)
+  const sideRole = document.getElementById("sidebar-user-role");
+  if (sideRole) {
+    const meta = PERFIL_META[appState.perfil] || PERFIL_META.estudiante;
+    sideRole.innerText = `${meta.etiqueta} IES N°5${appState.id_perfil ? " · #" + appState.id_perfil.slice(0, 6) : ""}`;
+  }
+
   // Iniciar la carga de la imagen con los 4 métodos de contingencia
   cargarImagenAutenticada(u.foto_url, nombreCompleto, [topAvatar, sideAvatar]);
 }
@@ -351,6 +510,7 @@ function actualizarBadgesSidebar() {
 }
 
 export function switchTab(tabName) {
+  try { localStorage.setItem(lsKey("ultima_tab"), tabName); } catch(e){}
   // Ocultar todos los contenedores de pestañas instantáneamente sin reflow
   const tabs = document.querySelectorAll(".tab-content");
   tabs.forEach(t => {
@@ -1101,8 +1261,11 @@ window.cerrarSesion = async () => {
   if (confirm("¿Seguro que querés cerrar la sesión?")) {
     try { await bridge.logout(); } catch(e){}
     appState.usuario = null;
+    appState.perfil = "estudiante";
+    appState.id_perfil = "";
+    campusListo = false;
     document.getElementById("topbar-user-section")?.classList.add("hidden");
-    document.getElementById("view-login")?.classList.remove("hidden");
+    mostrarVista("view-login");
   }
 };
 window.cambiarCursoActivo = (cursoId) => {

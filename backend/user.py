@@ -22,7 +22,9 @@ def get_current_user(sess: CampusSession = None, cache_dir: str = CONFIG_DIR, fo
     user_data = {
         "dni": "",
         "nombre": "",
-        "foto_url": ""
+        "foto_url": "",
+        "perfil": "",
+        "id_perfil": ""
     }
     cache_path = os.path.join(cache_dir, "user_cache.json") if cache_dir else USER_CACHE_FILE
 
@@ -97,8 +99,29 @@ def get_current_user(sess: CampusSession = None, cache_dir: str = CONFIG_DIR, fo
                 except Exception:
                     pass
 
+            # ── Detección dinámica del PERFIL de usuario (estudiante / docente / administrativo) ──
+            # Heurística basada en señales reales del HTML de escritorio.cgi. Sin valores estáticos.
+            perfil = ""
+            m_perfil = re.search(r'(?:tipo_usuario|rol_usuario|perfil_usuario|wPerfil)\s*[:=]\s*[\'"]?([A-Za-zÁÉÍÓÚáéíóú_ ]{3,20})', html)
+            if m_perfil:
+                perfil = m_perfil.group(1).strip().lower()
+            if not perfil:
+                texto_buscable = html.lower()
+                if any(k in texto_buscable for k in ("administrativo", "secretar", "preceptor", "gestor", "soporte acad")):
+                    perfil = "administrativo"
+                elif any(k in texto_buscable for k in ("docente", "profesor", "tutor", "catedra")):
+                    perfil = "docente"
+                elif any(k in texto_buscable for k in ("alumno", "estudiante", "inscript")):
+                    perfil = "estudiante"
+
         except Exception as e:
             logging.warning(f"Error al extraer datos de usuario dinámicos: {e}")
+
+        # ID único e independiente por persona: derivado del DNI/usuario real (no cambia entre sesiones)
+        identificador = (dni or "").strip()
+        if identificador:
+            import hashlib as _hl
+            user_data["id_perfil"] = _hl.sha256(identificador.lower().encode("utf-8")).hexdigest()[:16]
 
         if dni:
             user_data["dni"] = dni
@@ -107,6 +130,8 @@ def get_current_user(sess: CampusSession = None, cache_dir: str = CONFIG_DIR, fo
             sess.nombre = nombre
         if foto_url:
             user_data["foto_url"] = foto_url
+        if perfil:
+            user_data["perfil"] = perfil
 
         # Guardar en user_cache.json si obtuvimos al menos dni o nombre
         if user_data["dni"] or user_data["nombre"]:
@@ -119,6 +144,79 @@ def get_current_user(sess: CampusSession = None, cache_dir: str = CONFIG_DIR, fo
         return cached
 
     return user_data
+
+
+# ── Perfil de usuario (estudiante / docente / administrativo) ────────────────
+# Cada persona es independiente: su ID único se deriva del DNI/usuario real (hash estable),
+# por lo que cookies, cachés y preferencias nunca se mezclan entre usuarios.
+_PERFIL_CACHE = {}
+
+def _normalizar_perfil(valor: str) -> str:
+    v = (valor or "").strip().lower()
+    if not v:
+        return ""
+    if any(k in v for k in ("admin", "secretar", "preceptor", "gestor", "equipo directivo")):
+        return "administrativo"
+    if any(k in v for k in ("docente", "profesor", "tutor", "catedra")):
+        return "docente"
+    if any(k in v for k in ("alumno", "estudiante", "inscript")):
+        return "estudiante"
+    return ""
+
+def calcular_id_perfil(usuario: str) -> str:
+    """ID único, estable e independiente por persona (derivado del DNI/usuario)."""
+    import hashlib
+    ident = (usuario or "").strip().lower()
+    if not ident:
+        return ""
+    return hashlib.sha256(ident.encode("utf-8")).hexdigest()[:16]
+
+def detectar_perfil(sess=None) -> dict:
+    """
+    Determina el perfil del usuario autenticado SIN hardcodear valores:
+    1. Usa el cache en memoria por id_perfil (cada persona es independiente).
+    2. Si no hay sesión, devuelve datos mínimos {perfil:"", id_perfil:""}.
+    Devuelve {"perfil": str, "id_perfil": str, "nombre": str, "dni": str}.
+    """
+    if sess is None or not getattr(sess, "logged_in", False):
+        return {"perfil": "", "id_perfil": "", "nombre": "", "dni": ""}
+
+    dni = (getattr(sess, "usuario", "") or "").strip()
+    id_perfil = calcular_id_perfil(dni)
+    if id_perfil in _PERFIL_CACHE:
+        return _PERFIL_CACHE[id_perfil]
+
+    perfil = ""
+    try:
+        r = sess.get(sess.url("escritorio.cgi"), timeout=10)
+        html = decode_html(r.content)
+        m = re.search(
+            r'(?:tipo_usuario|rol_usuario|perfil_usuario|wPerfil|user_tipo)\s*[:=]\s*["\']([^"\']{2,40})["\']',
+            html, re.IGNORECASE)
+        if m:
+            perfil = _normalizar_perfil(m.group(1))
+        if not perfil:
+            txt = html.lower()
+            # Señales específicas de rol administrativo (evitan falsos positivos por menús genéricos)
+            if any(k in txt for k in ("administrativo", "secretaría académica", "secretaria academica",
+                                      "preceptor", "equipo directivo", "soporte académico")):
+                perfil = "administrativo"
+            elif re.search(r'mis\s+alumnos|mis\s+curso[s]?|catedra|cargo\s*docente|"docente"', txt):
+                perfil = "docente"
+            else:
+                perfil = "estudiante"  # default razonable para Educativa/LMS con id_curso
+    except Exception as e:
+        logging.warning(f"No se pudo detectar el perfil dinámicamente: {e}")
+        perfil = "estudiante"
+
+    resultado = {
+        "perfil": perfil,
+        "id_perfil": id_perfil,
+        "dni": dni,
+        "nombre": (getattr(sess, "nombre", "") or dni),
+    }
+    _PERFIL_CACHE[id_perfil] = resultado
+    return resultado
 
 
 def guardar_user_cache(data: dict, file_path: str = USER_CACHE_FILE):

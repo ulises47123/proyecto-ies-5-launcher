@@ -142,6 +142,11 @@ class CampusAPI(PyloidIPC):
     def get_profile(self) -> str:
         return self._submit_job(self.auth.get_user_profile)
 
+    @Bridge(result=str)
+    def get_perfil_info(self) -> str:
+        """Perfil de rol (estudiante/docente/administrativo) + id_perfil único por persona."""
+        return json.dumps(self.auth.get_perfil_info())
+
     # ── Cursos y Escritorio ──
     @Bridge(str, str, int, result=str)
     def resolve_image(self, url: str, nombre: str = "", metodo: int = 1) -> str:

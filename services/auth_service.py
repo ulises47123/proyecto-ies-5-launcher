@@ -10,7 +10,7 @@ from config import (
     guardar_cookies_sesion, cargar_cookies_sesion, borrar_cookies_sesion,
     guardar_config, cargar_config
 )
-from backend.user import get_current_user, limpiar_user_cache
+from backend.user import get_current_user, limpiar_user_cache, detectar_perfil, calcular_id_perfil
 
 
 class AuthService:
@@ -64,7 +64,8 @@ class AuthService:
                         "mensaje": "Inicio de sesión exitoso.",
                         "usuario": self.session.usuario,
                         "nombre": self.session.nombre,
-                        "profile": profile
+                        "profile": profile,
+                        "perfil_info": detectar_perfil(self.session)
                     }
                 }
             return {"ok": False, "error": msg or "Credenciales incorrectas."}
@@ -83,7 +84,8 @@ class AuthService:
                         "data": {
                             "metodo": "cookies",
                             "mensaje": "Sesión restaurada mediante cookies.",
-                            "profile": profile
+                            "profile": profile,
+                            "perfil_info": detectar_perfil(self.session)
                         }
                     }
 
@@ -98,7 +100,8 @@ class AuthService:
                         "data": {
                             "metodo": "credenciales",
                             "mensaje": "Sesión restaurada mediante credenciales guardadas.",
-                            "profile": profile
+                            "profile": profile,
+                            "perfil_info": detectar_perfil(self.session)
                         }
                     }
 
@@ -109,9 +112,20 @@ class AuthService:
     def get_user_profile(self) -> Dict[str, Any]:
         try:
             profile = get_current_user(self.session)
+            info = detectar_perfil(self.session)
+            # Enriquecer el perfil con datos de identidad independiente por persona
+            profile = {**profile, "perfil": info.get("perfil", ""), "id_perfil": info.get("id_perfil", "")}
             return {"ok": True, "data": profile}
         except Exception as e:
             return {"ok": False, "error": f"No se pudo obtener el perfil: {str(e)}"}
+
+    def get_perfil_info(self) -> Dict[str, Any]:
+        """Devuelve el perfil (estudiante/docente/administrativo) + ID único del usuario actual."""
+        try:
+            info = detectar_perfil(self.session)
+            return {"ok": True, "data": info}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     def logout(self) -> Dict[str, Any]:
         try:
