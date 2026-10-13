@@ -72,6 +72,7 @@ class PyloidBridge {
   }
   async logout() { return this._call("logout"); }
   async getProfile() { return this._call("get_profile"); }
+  async getPerfilInfo() { return this._call("get_perfil_info"); }
 
   // ── Materias / Cursos ──
   async resolveImage(url, nombre = "", metodo = 1) { return this._call("resolve_image", String(url), String(nombre), Number(metodo)); }

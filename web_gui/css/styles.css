@@ -247,3 +247,145 @@ main, section, aside, .subtab-content, #dash-grid-materias {
   contain: content;
   will-change: transform, opacity, contents;
 }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   VISTA DE BIENVENIDA + MARQUEE (estilo shadcn/ui Marquee adaptado a CSS puro)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Transición de vistas SIN parpadeos: solo opacity/visibility (compositor GPU) */
+#view-login, #view-welcome {
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+  will-change: opacity;
+  contain: layout paint style;
+}
+
+.animate-welcome-in {
+  animation: welcomeIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes welcomeIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Contenedor y track del marquee (loop infinito con translateX -50%) */
+.marquee-wrap {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+}
+.marquee-track {
+  display: flex;
+  gap: 1rem;
+  width: max-content;
+  animation: marquee-scroll 28s linear infinite;
+  will-change: transform;
+  transform: translateZ(0);
+}
+.marquee-track.marquee-reverse {
+  animation-direction: reverse;
+}
+.marquee-wrap:hover .marquee-track {
+  animation-play-state: paused; /* pauseOnHover */
+}
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* ReviewCard estilo shadcn/ui */
+.review-card {
+  position: relative;
+  height: 100%;
+  width: 16rem;
+  cursor: pointer;
+  overflow: hidden;
+  border-radius: 0.9rem;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+.review-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-bright);
+  transform: translateY(-2px) translateZ(0);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MENÚ PRINCIPAL MODERNIZADO Y AGRANDADO (sin romper la vista)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Sidebar más amplio con navegación legible */
+aside nav button.nav-btn {
+  font-size: 14px !important;
+  padding: 0.7rem 0.95rem !important;
+  gap: 0.75rem;
+  letter-spacing: 0.01em;
+}
+aside nav button.nav-btn .material-symbols-outlined {
+  font-size: 22px !important;
+}
+aside nav .nav-section-label {
+  font-size: 11px !important;
+  letter-spacing: 0.18em;
+}
+
+/* Badges de la barra lateral más grandes y redondeados */
+aside nav span[id^="badge-"] {
+  min-width: 26px;
+  height: 22px;
+  font-size: 12px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  padding: 0 8px;
+}
+
+/* Tarjeta de usuario del sidebar ampliada */
+#sidebar-user-avatar, .w-9.h-9.rounded-full.border-indigo-500 {
+  width: 46px !important;
+  height: 46px !important;
+}
+
+/* Topbar más alta y legible */
+header#topbar {
+  height: 76px;
+}
+header#topbar input[type="text"] {
+  font-size: 14px !important;
+  padding-top: 0.65rem !important;
+  padding-bottom: 0.65rem !important;
+}
+
+/* Contenido principal con escala tipográfica mayor sin romper grids */
+main#main-content {
+  zoom: 1.06; /* agranda uniformemente el menú principal manteniendo el layout */
+}
+main#main-content h2 {
+  font-size: 1.65rem;
+}
+main#main-content h3 {
+  font-size: 1.15rem;
+}
+
+/* Hero de bienvenida del dashboard renovado (glass + gradiente suave) */
+#tab-escritorio > div:first-child {
+  background:
+    radial-gradient(600px 200px at 15% 0%, rgba(99,102,241,.25), transparent),
+    radial-gradient(500px 220px at 90% 100%, rgba(217,70,239,.14), transparent),
+    var(--bg-card) !important;
+  border: 1px solid var(--border-bright) !important;
+  box-shadow: 0 20px 50px -20px var(--primary-glow) !important;
+}
+
+/* Métricas del dashboard un poco más grandes */
+#dash-stat-materias, #dash-stat-pendientes, #dash-stat-novedades, #dash-stat-promedio {
+  font-size: 1.9rem !important;
+}
+
+/* Scroll suave en toda la app */
+html { scroll-behavior: smooth; }
